@@ -27,37 +27,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
     private CameraBridgeViewBase mOpenCvCameraView;
 
-    /*
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        Log.i(TAG, "called onCreate");
-        super.onCreate(savedInstanceState);
-
-        if (OpenCVLoader.initLocal()) {
-            Log.i(TAG, "OpenCV loaded successfully");
-        } else {
-            Log.e(TAG, "OpenCV initialization failed!");
-            (Toast.makeText(this, "OpenCV initialization failed!", Toast.LENGTH_LONG)).show();
-            return;
-        }
-
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
-        //EdgeToEdge.enable(this);
-        setContentView(R.layout.activity_main);
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
-            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
-            return insets;
-        });
-
-        mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.tutorial1_activity_java_surface_view);
-
-        mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
-
-        mOpenCvCameraView.setCvCameraViewListener(this);
-    }
-*/
     @Override
     public void onCreate(Bundle savedInstanceState) {
         Log.i(TAG, "called onCreate");
@@ -65,7 +34,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
         if (OpenCVLoader.initLocal()) {
             Log.i(TAG, "OpenCV loaded successfully");
-            (Toast.makeText(this, "OpenCV initialization ok!", Toast.LENGTH_LONG)).show();
         } else {
             Log.e(TAG, "OpenCV initialization failed!");
             (Toast.makeText(this, "OpenCV initialization failed!", Toast.LENGTH_LONG)).show();
@@ -81,8 +49,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
 
         mOpenCvCameraView.setCvCameraViewListener(this);
-
-        (Toast.makeText(this, "onCreate ok!", Toast.LENGTH_LONG)).show();
     }
 
     @Override
