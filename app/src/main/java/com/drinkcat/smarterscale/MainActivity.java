@@ -453,8 +453,13 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         // TODO: Silly to resize twice
         Imgproc.resize(inputFrame.gray(), inputGray, new Size(), 1.0/origScale, 1.0/origScale, Imgproc.INTER_AREA);
         Imgproc.resize(inputColor, outputColor, new Size(), 1.0/origScale, 1.0/origScale, Imgproc.INTER_AREA);
+
+        Mat blurred = new Mat();
         Mat thresh = new Mat();
-        Imgproc.threshold(inputGray, thresh, 0, 255, Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
+        Imgproc.GaussianBlur(inputGray, blurred, new Size(3, 3), 3.0 , 0);
+        Imgproc.Canny(blurred, thresh, 150, 200);
+        blurred.release();
+        //Imgproc.threshold(inputGray, thresh, 0, 255, Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
 
         /* Compute histogram */
          {
@@ -495,10 +500,10 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
              for (int i = 200; i < histSize; i++)
                  histSumSaturated += histData[i];
              if (histSumMid < histSum/3)
-                 exposure = Math.min(exposure + 0.05, 1.0);
+                 exposure = Math.min(exposure + 0.02, 1.0);
              if (histSumSaturated >= 1)
                  exposure = Math.max(exposure - 0.05, -1.0);
-             Imgproc.putText(outputColor, "<" + exposure + ">", new Point(outputColor.width()-200, outputColor.height()-50),
+             Imgproc.putText(outputColor, "" + exposure, new Point(outputColor.width()-300, outputColor.height()-50),
                      Imgproc.FONT_HERSHEY_SIMPLEX, 2, new Scalar(255, 0, 0), 2);
          }
 
@@ -555,7 +560,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
          // FIXME: c2f and angle are used below, be careful this is ugly
 
-        Imgproc.drawContours(outputColor, cnts, -1, new Scalar(0,255,0), 1);
+        Imgproc.drawContours(outputColor, cnts, -1, new Scalar(0,255,0), 3);
         Rect rect;
         //found = false;  // FIXME: logic above often doesn't help...
         if (found) {
@@ -563,13 +568,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         } else {
             rect = new Rect(250, 250, 500, 500);
             angle = 0.0;
-            /*
-            Mat output = new Mat();
-            // TODO: Silly to resize back
-            Imgproc.resize(outputColor, output, inputSize, 0, 0, Imgproc.INTER_AREA);
-            outputColor.release();
-            return output;
-             */
         }
 
         Imgproc.rectangle(outputColor, rect, new Scalar(255,0,0), 5);
