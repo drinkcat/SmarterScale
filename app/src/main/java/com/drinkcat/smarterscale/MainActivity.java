@@ -1,5 +1,6 @@
 package com.drinkcat.smarterscale;
 
+import android.hardware.Camera;
 import android.os.Bundle;
 import android.provider.ContactsContract;
 import android.util.Log;
@@ -105,40 +106,103 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                 + int_thresh.get(rect.y, rect.x)[0];
     }
 
+    private class TaggedRect extends Rect {
+        public boolean visited = false;
+
+        TaggedRect(Rect r) { this(r, false); }
+        TaggedRect(Rect r, boolean visited) {
+            super(r.x, r.y, r.width, r.height); this.visited = visited;
+        }
+    }
+
+    private Rect overlapRaw(Rect a, Rect b) {
+        int x = Math.max(a.x, b.x);
+        int y = Math.max(a.y, b.y);
+        int width = Math.min(a.x+a.width, b.x+b.width) - x;
+        int height = Math.min(a.y+a.height, b.y-b.height) - y;
+
+        return new Rect(x, y, width, height);
+    }
+
+    private boolean overlapCheck(Rect a, Rect b) {
+        Rect o = overlapRaw(a, b);
+        return (o.width >= 0 && o.height >= 0);
+    }
+
+    private boolean overlapSegment(Rect a, Rect b) {
+        Rect o = overlapRaw(a, b);
+
+        // For vertical segments, accept slightly non-overlapping segments
+        // to catch digits like 0 and 1 that don't have a vertical segment
+        // in the center
+        final double VERT_EXPAND_RATIO = 0.5;
+        double th = 0.0;
+        if (a.width > a.height && b.width > b.height)
+            th = - VERT_EXPAND_RATIO * o.width;
+
+        return (o.width >= 0 && o.height >= th);
+    }
+
+    private Rect union(Rect a, Rect b) {
+        if (a == null) return b;
+        if (b == null) return a;
+
+        int x = Math.min(a.x, b.x);
+        int y = Math.min(a.y, b.y);
+        int width = Math.max(a.x+a.width, b.x+b.width) - x;
+        int height = Math.max(a.y+a.height, b.y-b.height) - y;
+
+        return new Rect(x, y, width, height);
+    }
+
     private Mat findDigits(Mat input) {
         /* TODO: original version needed 1000x1000 image... */
-        // image = imutils.resize(image, height=1000)
+        Mat resizeInput = new Mat();
+        Imgproc.resize(input, resizeInput, new Size(1000,1000), 0, 0, Imgproc.INTER_AREA);
+
+        Mat output = resizeInput;
 
         Mat gray = new Mat();
-        Imgproc.cvtColor(input, gray, Imgproc.COLOR_BGR2GRAY);
+        Imgproc.cvtColor(resizeInput, gray, Imgproc.COLOR_BGR2GRAY);
         // # TODO: Compute OTSU within display only
         Mat thresh = new Mat();
-        Imgproc.threshold(gray, thresh, 0, 255, Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
+        Imgproc.threshold(gray, thresh, 0, 255, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
+        gray.release();
         Mat int_thresh = new Mat();
         Imgproc.integral(thresh, int_thresh);
 
         List<MatOfPoint> cnts = new ArrayList<MatOfPoint>();
         Mat hierarchy = new Mat();
 
-        /* # TODO: Consider adding erosion/dilation dynamically
-        kernel = numpy.ones((3, 3), numpy.uint8)
-        thresh = cv2.erode(thresh, kernel, iterations=5)
-        thresh = cv2.dilate(thresh, kernel, iterations=5)
-        */
+        int kernelSize = 3;
+        Mat element = Imgproc.getStructuringElement(Imgproc.CV_SHAPE_RECT,
+            new Size(2 * kernelSize + 1, 2 * kernelSize + 1),
+                new Point(kernelSize, kernelSize));
+        Mat tmp = new Mat();
+        Imgproc.erode(thresh, tmp, element);
+        Imgproc.erode(tmp, thresh, element);
+        Imgproc.erode(thresh, tmp, element);
+        Imgproc.dilate(tmp, thresh, element);
+        Imgproc.dilate(thresh, tmp, element);
+        Imgproc.dilate(tmp, thresh, element);
+        tmp.release();
+
+        output.release();
+        Imgproc.cvtColor(thresh, output, Imgproc.COLOR_GRAY2BGRA);
 
         Imgproc.findContours(thresh, cnts, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
-        //Imgproc.drawContours(input, cnts, -1, new Scalar(0,255,0), 3);
+        Imgproc.drawContours(output, cnts, -1, new Scalar(0,255,0), 2);
 
-        LinkedList<Rect> rectIgnore = new LinkedList<Rect>();
-        LinkedList<Rect> rectGood = new LinkedList<Rect>(); // Vertical and horizontal segments
-        LinkedList<Rect> rectDot = new LinkedList<Rect>(); // Dots
+        LinkedList<TaggedRect> rectIgnore = new LinkedList<TaggedRect>();
+        LinkedList<TaggedRect> rectGood = new LinkedList<TaggedRect>(); // Vertical and horizontal segments
+        LinkedList<TaggedRect> rectDot = new LinkedList<TaggedRect>(); // Dots
 
         for (MatOfPoint c: cnts) {
             Rect rect = Imgproc.boundingRect(c);
 
             if (rect.width < 10 || rect.height < 10) {
                 //rectIgnore.add(rect);
-                Log.d(TAG, "ignore too small: " + rect);
+                //Log.d(TAG, "ignore too small: " + rect);
                 continue;
             }
 
@@ -146,7 +210,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                     rect.x + rect.width > thresh.size().width - 10 ||
                     rect.y + rect.height > thresh.size().height - 10) {
                 //rectIgnore.add(rect);
-                Log.d(TAG, "ignore on the edge: " + rect + " // " + thresh.size());
+                //Log.d(TAG, "ignore on the edge: " + rect + " // " + thresh.size());
                 continue;
             }
 
@@ -155,8 +219,8 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             double ratio = (w > h) ? w/h : h/w;
 
             if (ratio > 1.1 && ratio < 2.0) {
-                rectIgnore.add(rect);
-                Log.d(TAG, "ignore by ratio: " + rect + " / " + ratio);
+                rectIgnore.add(new TaggedRect(rect));
+                //Log.d(TAG, "ignore by ratio: " + rect + " / " + ratio);
                 continue;
             }
 
@@ -165,36 +229,75 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             double fillratio = area / rect_area / 255;
 
             if (fillratio < 0.50) { // # Unlikely a segment?
-                rectIgnore.add(rect);
-                Log.d(TAG, "ignore by fill ratio: " + rect + " // " + fillratio);
+                rectIgnore.add(new TaggedRect(rect));
+                //Log.d(TAG, "ignore by fill ratio: " + rect + " // " + fillratio);
                 continue;
             }
 
             if (ratio > 2.0) {
-                rectGood.add(rect); // TODO: ADD False TAG
+                rectGood.add(new TaggedRect(rect));
             } else {
-                rectDot.add(rect); // TODO: ADD False TAG
+                rectDot.add(new TaggedRect(rect));
             }
-            Log.d(TAG, "good: " + rect + " / " + ratio + " // " + fillratio);
+            //Log.d(TAG, "good: " + rect + " / " + ratio + " // " + fillratio);
         }
 
         for (Rect rect: rectIgnore)
-            Imgproc.rectangle(input, rect, new Scalar(255,0,0), 1);
+            Imgproc.rectangle(output, rect, new Scalar(255,0,0), 1);
 
         for (Rect rect: rectGood)
-            Imgproc.rectangle(input, rect, new Scalar(0,0,255), 1);
+            Imgproc.rectangle(output, rect, new Scalar(0,0,255), 3);
 
         for (Rect rect: rectDot)
-            Imgproc.rectangle(input, rect, new Scalar(0,255,255), 1);
+            Imgproc.rectangle(output, rect, new Scalar(0,255,255), 3);
 
-        return input;
+        LinkedList<List<Rect>> groups = new LinkedList<List<Rect>>();
+
+        // Extract digits, bruteforce (can most likely be optimized)
+        for (TaggedRect r1: rectGood) {
+            if (r1.visited) continue;
+            r1.visited = true;
+            LinkedList<Rect> group = new LinkedList<>();
+            group.add(r1);
+            boolean added;
+            do {
+                added = false;
+                for (TaggedRect r2: rectGood) {
+                    if (r2.visited) continue;
+                    for (Rect r3: group) {
+                        if (!overlapSegment(r2, r3)) continue;
+                        r2.visited = true;
+                        added = true;
+                        break;
+                    }
+                    if (r2.visited) // Add outside the loop to avoid concurent modification
+                        group.add(r2);
+                }
+            } while (added);
+            groups.add(group);
+        }
+
+        for (List<Rect> group: groups) {
+            Rect u = null;
+            for (Rect r: group) {
+                u = union(u, r);
+            }
+            Imgproc.rectangle(output, u, new Scalar(255,0,255), 10);
+        }
+
+        return output;
     }
 
-        @Override
+    boolean init = false;
+     @Override
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         // FIXME: we like zoom, zoomies!
-        List<Integer> zooms = mOpenCvCameraView.getZoomRatios();
-        mOpenCvCameraView.setZoom(zooms.size() - 1);
+        if (!init) {
+            List<Integer> zooms = mOpenCvCameraView.getZoomRatios();
+            mOpenCvCameraView.setZoom(zooms.size() - 1);
+            init = true;
+            return inputFrame.rgba();
+        }
 
         Mat inputColor = inputFrame.rgba();
         Size inputSize = inputColor.size();
@@ -209,10 +312,12 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         Imgproc.resize(inputColor, outputColor, new Size(), 1.0/origScale, 1.0/origScale, Imgproc.INTER_AREA);
         Mat thresh = new Mat();
         Imgproc.threshold(inputGray, thresh, 0, 255, Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
+        inputGray.release();
 
         List<MatOfPoint> cnts = new ArrayList<MatOfPoint>();
         Mat hierarchy = new Mat();
         Imgproc.findContours(thresh, cnts, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
+        thresh.release();
 
         // FIXME: This is ugly, I'm computing contourArea over and over again.
         cnts.sort(Comparator.comparingDouble((Mat c) -> Imgproc.contourArea(c)).reversed());
@@ -255,6 +360,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             Mat output = new Mat();
             // TODO: Silly to resize back
             Imgproc.resize(outputColor, output, inputSize, 0, 0, Imgproc.INTER_AREA);
+            outputColor.release();
             return output;
         }
 
@@ -268,6 +374,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         Mat M = Imgproc.getRotationMatrix2D(new Point(rect.width/2, rect.height/2), -angle, 1.0);
         Mat img_rot = new Mat();
         Imgproc.warpAffine(img_crop, img_rot, M, rect.size());
+        img_crop.release();
         /* TODO: second round of cropping
             # rotate contour
             pts = numpy.int32(cv2.transform(numpy.array(c), M))
@@ -279,19 +386,21 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             (x, y, w, h) = rect
             img_crop = img_rot[y:(y+h), x:(x+w)]
          */
-
-            Mat img_processed = findDigits(img_rot);
+        Mat img_processed = findDigits(img_rot);
 
         Mat output = new Mat();
         // TODO: Silly to resize back
         Imgproc.resize(outputColor, output, inputSize, 0, 0, Imgproc.INTER_AREA);
-
-        Rect roi = new Rect( new Point( 0, 0 ), new Size( inputSize.width/2, inputSize.height/2 ));
+        outputColor.release();
+        double overlayRatio = 0.5;
+        Size overlaySize = new Size( inputSize.width*overlayRatio, inputSize.height*overlayRatio );
+        Rect roi = new Rect( new Point( 0, 0 ), overlaySize);
         Mat destinationROI = new Mat(output, roi );
-        Imgproc.resize(img_processed, destinationROI, new Size( inputSize.width/2, inputSize.height/2 ), 0, 0, Imgproc.INTER_AREA);
+        Imgproc.resize(img_processed, destinationROI, overlaySize, 0, 0, Imgproc.INTER_AREA);
         //img_rot.copyTo(destinationROI);
 
         //Imgproc.resize(img_rot, output, inputSize, 0, 0, Imgproc.INTER_AREA);
+        img_processed.release();
         return output;
     }
 }
