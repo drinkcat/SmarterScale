@@ -21,6 +21,7 @@ import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfFloat;
 import org.opencv.core.MatOfInt;
@@ -453,61 +454,24 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         // TODO: Silly to resize twice
         Imgproc.resize(inputFrame.gray(), inputGray, new Size(), 1.0/origScale, 1.0/origScale, Imgproc.INTER_AREA);
         Imgproc.resize(inputColor, outputColor, new Size(), 1.0/origScale, 1.0/origScale, Imgproc.INTER_AREA);
-
-        Mat blurred = new Mat();
-        Mat thresh = new Mat();
-        Imgproc.GaussianBlur(inputGray, blurred, new Size(3, 3), 3.0 , 0);
-        Imgproc.Canny(blurred, thresh, 150, 200);
-        blurred.release();
-        //Imgproc.threshold(inputGray, thresh, 0, 255, Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
-
-        /* Compute histogram */
-         {
-             int histSize = 256;
-             MatOfFloat histRange = new MatOfFloat(new float[]{0, 256});
-             Mat hist = new Mat();
-             List<Mat> inputGrayList = new LinkedList<>();
-             inputGrayList.add(inputGray);
-             Imgproc.calcHist(inputGrayList, new MatOfInt(0), new Mat(), hist, new MatOfInt(histSize), histRange, false);
-             float[] histData = new float[(int) (hist.total() * hist.channels())];
-             hist.get(0, 0, histData);
-             float histSum = 0.0f;
-             for (float f : histData)
-                 histSum += f;
-             //Log.d(TAG, "hist " + histSize + ":" + Arrays.toString(histData));
-             final int basex = outputColor.width() - 256 * 2 - 10;
-             final int basey = outputColor.height();
-             Imgproc.line(outputColor,
-                     new Point(basex-4, basey),
-                     new Point(basex-4, basey - 10.0/256.0 * 500),
-                     new Scalar(255, 255, 0), 2);
-             Imgproc.line(outputColor,
-                     new Point(basex+257*2, basey),
-                     new Point(basex+257*2, basey - 10.0/256.0 * 500),
-                     new Scalar(255, 255, 0), 2);
-             for (int i = 0; i < histSize; i++) {
-                 Imgproc.line(outputColor,
-                         new Point(basex + i * 2, basey),
-                         new Point(basex + i * 2, basey - Math.log(histData[i] / histSum * 500)*20),
-                         new Scalar(255, 0, 0), 2);
-             }
-
-             /* Reduce exposure until we have no pixels > 200 */
-             float histSumSaturated = 0.0f;
-             float histSumMid = 0.0f;
-             for (int i = 100; i < 200; i++)
-                 histSumMid += histData[i];
-             for (int i = 200; i < histSize; i++)
-                 histSumSaturated += histData[i];
-             if (histSumMid < histSum/3)
-                 exposure = Math.min(exposure + 0.02, 1.0);
-             if (histSumSaturated >= 1)
-                 exposure = Math.max(exposure - 0.05, -1.0);
-             Imgproc.putText(outputColor, "" + exposure, new Point(outputColor.width()-300, outputColor.height()-50),
-                     Imgproc.FONT_HERSHEY_SIMPLEX, 2, new Scalar(255, 0, 0), 2);
+/*
+        Mat lines = new Mat();
+        Imgproc.HoughLinesP(inputGray, lines, 1, Math.PI/180, 50);
+         for (int i = 0; i < lines.cols(); i++) {
+             double[] val = lines.get(0, i);
+             Imgproc.line(outputColor, new Point(val[0], val[1]), new Point(val[2], val[3]), new Scalar(0, 0, 255), 2);
          }
-
-        /* End of compute histogram */
+*/
+        Mat thresh = new Mat();
+        // Canny alternative
+         if (false) {
+             Mat blurred = new Mat();
+             Imgproc.GaussianBlur(inputGray, blurred, new Size(3, 3), 3.0, 0);
+             Imgproc.Canny(blurred, thresh, 150, 200);
+             blurred.release();
+         } else {
+             Imgproc.threshold(inputGray, thresh, 0, 255, Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
+         }
         inputGray.release();
 
         List<MatOfPoint> cnts = new ArrayList<MatOfPoint>();
@@ -568,6 +532,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         } else {
             rect = new Rect(250, 250, 500, 500);
             angle = 0.0;
+            c2f = null;
         }
 
         Imgproc.rectangle(outputColor, rect, new Scalar(255,0,0), 5);
@@ -579,6 +544,19 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         Mat img_rot = new Mat();
         Imgproc.warpAffine(img_crop, img_rot, M, rect.size());
         img_crop.release();
+
+        /* Mask the outside of the contour */
+        if (c2f != null) {
+            MatOfPoint2f transc2f = new MatOfPoint2f();
+            c2f.convertTo(transc2f, -1, origscale);
+            MatOfPoint2f rotc2f = new MatOfPoint2f();
+            Core.transform(transc2f, rotc2f, M);
+            MatOfPoint c = new MatOfPoint(rotc2f.toArray());
+            LinkedList<MatOfPoint> clist = new LinkedList<MatOfPoint>();
+            clist.add(c);
+            Imgproc.drawContours(img_rot, clist, -1, new Scalar(255), 20);
+        }
+
         /* TODO: second round of cropping
             # rotate contour
             pts = numpy.int32(cv2.transform(numpy.array(c), M))
@@ -590,6 +568,58 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             (x, y, w, h) = rect
             img_crop = img_rot[y:(y+h), x:(x+w)]
          */
+
+         /* Compute histogram */
+         {
+             inputGray = new Mat();
+             Imgproc.cvtColor(img_rot, inputGray, Imgproc.COLOR_BGR2GRAY);
+             int histSize = 256;
+             MatOfFloat histRange = new MatOfFloat(new float[]{0, 256});
+             Mat hist = new Mat();
+             List<Mat> inputGrayList = new LinkedList<>();
+             inputGrayList.add(inputGray);
+             Imgproc.calcHist(inputGrayList, new MatOfInt(0), new Mat(), hist, new MatOfInt(histSize), histRange, false);
+             float[] histData = new float[(int) (hist.total() * hist.channels())];
+             hist.get(0, 0, histData);
+             float histSum = 0.0f;
+             for (float f : histData)
+                 histSum += f;
+             //Log.d(TAG, "hist " + histSize + ":" + Arrays.toString(histData));
+             final int basex = outputColor.width() - 256 * 2 - 10;
+             final int basey = outputColor.height();
+             Imgproc.line(outputColor,
+                     new Point(basex-4, basey),
+                     new Point(basex-4, basey - 10.0/256.0 * 500),
+                     new Scalar(255, 255, 0), 2);
+             Imgproc.line(outputColor,
+                     new Point(basex+257*2, basey),
+                     new Point(basex+257*2, basey - 10.0/256.0 * 500),
+                     new Scalar(255, 255, 0), 2);
+             for (int i = 0; i < histSize; i++) {
+                 Imgproc.line(outputColor,
+                         new Point(basex + i * 2, basey),
+                         new Point(basex + i * 2, basey - Math.log(histData[i] / histSum * 500)*20),
+                         new Scalar(255, 0, 0), 2);
+             }
+
+             /* Reduce exposure until we have no pixels > 200 */
+             float histSumSaturated = 0.0f;
+             float histSumMid = 0.0f;
+             for (int i = 100; i < 200; i++)
+                 histSumMid += histData[i];
+             for (int i = 200; i < histSize; i++)
+                 histSumSaturated += histData[i];
+             if (histSumMid < histSum/3)
+                 exposure = Math.min(exposure + 0.02, 1.0);
+             if (histSumSaturated >= 1)
+                 exposure = Math.max(exposure - 0.05, -1.0);
+             Imgproc.putText(outputColor, "" + exposure, new Point(outputColor.width()-300, outputColor.height()-50),
+                     Imgproc.FONT_HERSHEY_SIMPLEX, 2, new Scalar(255, 0, 0), 2);
+             inputGray.release();
+         }
+
+         /* End of compute histogram */
+
         Mat img_processed = findDigits(img_rot);
 
         Mat output = new Mat();
