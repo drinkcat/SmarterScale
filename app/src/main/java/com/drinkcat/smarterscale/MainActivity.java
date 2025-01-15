@@ -4,7 +4,9 @@ import android.hardware.Camera;
 import android.os.Bundle;
 import android.provider.ContactsContract;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.SurfaceView;
+import android.view.View;
 import android.view.WindowManager;
 import android.widget.Toast;
 
@@ -20,6 +22,8 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfFloat;
+import org.opencv.core.MatOfInt;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
@@ -30,12 +34,14 @@ import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 
-public class MainActivity extends CameraActivity implements CvCameraViewListener2 {
+public class MainActivity extends CameraActivity implements CvCameraViewListener2, View.OnTouchListener {
     private static final String TAG = "MainActivity";
 
     private SmarterCameraView mOpenCvCameraView;
@@ -69,15 +75,17 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     {
         super.onPause();
         if (mOpenCvCameraView != null)
-            mOpenCvCameraView.disableView();
+            startStop(false);
     }
 
     @Override
     public void onResume()
     {
         super.onResume();
-        if (mOpenCvCameraView != null)
-            mOpenCvCameraView.enableView();
+        if (mOpenCvCameraView != null) {
+            startStop(true);
+            mOpenCvCameraView.setOnTouchListener(this);
+        }
     }
     @Override
     protected List<? extends CameraBridgeViewBase> getCameraViewList() {
@@ -88,7 +96,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     public void onDestroy() {
         super.onDestroy();
         if (mOpenCvCameraView != null)
-            mOpenCvCameraView.disableView();
+            startStop(false);
     }
 
     @Override
@@ -97,6 +105,25 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
     @Override
     public void onCameraViewStopped() {
+    }
+
+    public boolean started = false;
+    public void startStop(boolean start) {
+        if (start) {
+            init = false;
+            fcount = 0;
+            parsedText.clear();
+            mOpenCvCameraView.enableView();
+        } else {
+            mOpenCvCameraView.disableView();
+        }
+        started = start;
+    }
+
+    @Override
+    public boolean onTouch(View v, MotionEvent event) {
+        startStop(!started);
+        return true;
     }
 
     public double sumRect(Mat int_thresh, Rect rect) {
@@ -119,7 +146,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         int x = Math.max(a.x, b.x);
         int y = Math.max(a.y, b.y);
         int width = Math.min(a.x+a.width, b.x+b.width) - x;
-        int height = Math.min(a.y+a.height, b.y-b.height) - y;
+        int height = Math.min(a.y+a.height, b.y+b.height) - y;
 
         return new Rect(x, y, width, height);
     }
@@ -137,8 +164,10 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         // in the center
         final double VERT_EXPAND_RATIO = 0.5;
         double th = 0.0;
-        if (a.width > a.height && b.width > b.height)
+        if (a.width < a.height && b.width < b.height)
             th = - VERT_EXPAND_RATIO * o.width;
+
+        //Log.d(TAG, "overlap " + a + "/" + b + "=" + o);
 
         return (o.width >= 0 && o.height >= th);
     }
@@ -155,6 +184,18 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         return new Rect(x, y, width, height);
     }
 
+    private int sigArrayToSig(int[] sigarray) {
+        if (sigarray == null)
+            return -1;
+        int sig = 0;
+        for (int i: sigarray) {
+            sig <<= 1;
+            sig |= i;
+        }
+        return sig;
+    }
+
+    LinkedList<String> parsedText = new LinkedList<>();
     private Mat findDigits(Mat input) {
         /* TODO: original version needed 1000x1000 image... */
         Mat resizeInput = new Mat();
@@ -180,11 +221,11 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                 new Point(kernelSize, kernelSize));
         Mat tmp = new Mat();
         Imgproc.erode(thresh, tmp, element);
-        Imgproc.erode(tmp, thresh, element);
-        Imgproc.erode(thresh, tmp, element);
+        //Imgproc.erode(tmp, thresh, element);
+        //Imgproc.erode(thresh, tmp, element);
         Imgproc.dilate(tmp, thresh, element);
-        Imgproc.dilate(thresh, tmp, element);
-        Imgproc.dilate(tmp, thresh, element);
+        //Imgproc.dilate(thresh, tmp, element);
+        //Imgproc.dilate(tmp, thresh, element);
         tmp.release();
 
         output.release();
@@ -234,22 +275,21 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                 continue;
             }
 
-            if (ratio > 2.0) {
+            if (ratio > 2.0)
                 rectGood.add(new TaggedRect(rect));
-            } else {
+            else
                 rectDot.add(new TaggedRect(rect));
-            }
             //Log.d(TAG, "good: " + rect + " / " + ratio + " // " + fillratio);
         }
 
         for (Rect rect: rectIgnore)
-            Imgproc.rectangle(output, rect, new Scalar(255,0,0), 1);
+            Imgproc.rectangle(output, rect, new Scalar(255,0,0), 3);
 
         for (Rect rect: rectGood)
             Imgproc.rectangle(output, rect, new Scalar(0,0,255), 3);
 
         for (Rect rect: rectDot)
-            Imgproc.rectangle(output, rect, new Scalar(0,255,255), 3);
+            Imgproc.rectangle(output, rect, new Scalar(0,255,255), 10);
 
         LinkedList<List<Rect>> groups = new LinkedList<List<Rect>>();
 
@@ -277,18 +317,110 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             groups.add(group);
         }
 
+        /* Could be initialized only once */
+        HashMap<Integer,String> DIGITMAP = new HashMap<Integer, String>();
+        DIGITMAP.put(sigArrayToSig(new int[]{1, 0, 1, 1, 1, 1, 1}), "0");
+        DIGITMAP.put(sigArrayToSig(new int[]{0, 0, 0, 1, 0, 1, 0}), "1");
+        DIGITMAP.put(sigArrayToSig(new int[]{1, 1, 1, 0, 1, 1, 0}), "2");
+        DIGITMAP.put(sigArrayToSig(new int[]{1, 1, 1, 0, 1, 0, 1}), "3");
+        DIGITMAP.put(sigArrayToSig(new int[]{0, 1, 0, 1, 1, 0, 1}), "4");
+        DIGITMAP.put(sigArrayToSig(new int[]{1, 1, 1, 1, 0, 0, 1}), "5");
+        DIGITMAP.put(sigArrayToSig(new int[]{1, 1, 1, 1, 0, 1, 1}), "6");
+        DIGITMAP.put(sigArrayToSig(new int[]{1, 0, 0, 0, 1, 0, 1}), "7");
+        DIGITMAP.put(sigArrayToSig(new int[]{1, 1, 1, 1, 1, 1, 1}), "8");
+        DIGITMAP.put(sigArrayToSig(new int[]{1, 1, 1, 1, 1, 0, 1}), "9");
+
+        HashMap<Integer,String> DOTMAP = new HashMap<Integer, String>();
+        DIGITMAP.put(sigArrayToSig(new int[]{0, 0, 0, 1}), ".");
+        DIGITMAP.put(sigArrayToSig(new int[]{0, 1, 1, 0}), ":");
+
+        HashMap<Integer,String> digits = new HashMap<Integer, String>();
         for (List<Rect> group: groups) {
             Rect u = null;
-            for (Rect r: group) {
+            for (Rect r : group)
                 u = union(u, r);
+            Imgproc.rectangle(output, u, new Scalar(255, 0, 255), 10);
+            int[] sigarray = new int[7];
+            for (Rect r : group) {
+                int sx = (int)Math.round(1.0 * (r.x - u.x) / u.width);
+                int sy = (int)Math.round(2.0 * (r.y - u.y) / u.height);
+                int idx;
+                if (r.width > r.height)
+                    idx = sy;
+                else
+                    idx = 3 + 2 * sy + sx;
+                if (idx < 0 || idx >= sigarray.length) {
+                    sigarray = null;
+                    break;
+                }
+                sigarray[idx] = 1;
             }
-            Imgproc.rectangle(output, u, new Scalar(255,0,255), 10);
+            String digit = DIGITMAP.get(sigArrayToSig(sigarray));
+            Log.d(TAG, "found digit: " + digit + " from " + Arrays.toString(sigarray));
+
+            if (digit == null)
+                continue;
+
+            // Also look for nearby dots on the left and right
+            int[][] dotsigarray = new int[2][4];
+            for (TaggedRect r2: rectDot) {
+                if (r2.visited) continue;
+                // Half the diameter tolerance
+                double tolerance = (r2.width+r2.height)/2.0/2.0;
+                Rect o = overlapRaw(r2, u);
+                if (o.width < -tolerance || o.height < -tolerance)
+                    continue;
+
+                r2.visited = true;
+                int sx, sy;
+                if (r2.x < u.x) // left
+                    sx = 0;
+                else if (r2.x+r2.width > u.x+u.width) // right
+                    sx = 1;
+                else
+                    continue; //center?!
+
+                sy = (int)Math.round(3.0*(r2.y-u.y)/u.height);
+                if (sy < 0 || sy >= dotsigarray[sx].length)
+                    continue;
+                dotsigarray[sx][sy] = 1;
+            }
+
+            String leftdot = DIGITMAP.get(sigArrayToSig(dotsigarray[0]));
+            String rightdot = DIGITMAP.get(sigArrayToSig(dotsigarray[1]));
+            Log.d(TAG, "found dot: " + leftdot + "/" + rightdot +
+                    " from " + Arrays.toString(dotsigarray[0]) + "/"  + Arrays.toString(dotsigarray[1]));
+
+            if (leftdot != null)
+                digit = leftdot + digit;
+            if (rightdot != null)
+                digit = digit + rightdot;
+            digits.put(u.x, digit);
         }
+
+        StringBuilder sb = new StringBuilder();
+        ArrayList<Integer> keys = new ArrayList<Integer>(digits.keySet());
+        Collections.sort(keys);
+        for (int ux: keys)
+            sb.append(digits.get(ux));
+        String s = sb.toString();
+        Log.d(TAG, "Parsed: " + s);
+
+        Imgproc.putText(output, s, new Point(0, output.size().height),
+                Imgproc.FONT_HERSHEY_SIMPLEX, 10, new Scalar(128, 128, 255), 10);
+
+        // TODO: Using a circular buffer would be better...
+        parsedText.addFirst(s);
+        while (parsedText.size() > 30)
+            parsedText.removeLast();
 
         return output;
     }
 
     boolean init = false;
+
+    int fcount = 0;
+    double exposure = 0.0f;
      @Override
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         // FIXME: we like zoom, zoomies!
@@ -298,6 +430,17 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             init = true;
             return inputFrame.rgba();
         }
+
+        if (fcount == 0) {
+            mOpenCvCameraView.setExposureLock(false);
+            mOpenCvCameraView.setExposure(exposure);
+        } else if (fcount >= 5) {
+            mOpenCvCameraView.setExposureLock(true);
+            mOpenCvCameraView.setExposure(exposure);
+        }
+        fcount++;
+        if (fcount > 50)
+            fcount = 0;
 
         Mat inputColor = inputFrame.rgba();
         Size inputSize = inputColor.size();
@@ -312,6 +455,54 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         Imgproc.resize(inputColor, outputColor, new Size(), 1.0/origScale, 1.0/origScale, Imgproc.INTER_AREA);
         Mat thresh = new Mat();
         Imgproc.threshold(inputGray, thresh, 0, 255, Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
+
+        /* Compute histogram */
+         {
+             int histSize = 256;
+             MatOfFloat histRange = new MatOfFloat(new float[]{0, 256});
+             Mat hist = new Mat();
+             List<Mat> inputGrayList = new LinkedList<>();
+             inputGrayList.add(inputGray);
+             Imgproc.calcHist(inputGrayList, new MatOfInt(0), new Mat(), hist, new MatOfInt(histSize), histRange, false);
+             float[] histData = new float[(int) (hist.total() * hist.channels())];
+             hist.get(0, 0, histData);
+             float histSum = 0.0f;
+             for (float f : histData)
+                 histSum += f;
+             //Log.d(TAG, "hist " + histSize + ":" + Arrays.toString(histData));
+             final int basex = outputColor.width() - 256 * 2 - 10;
+             final int basey = outputColor.height();
+             Imgproc.line(outputColor,
+                     new Point(basex-4, basey),
+                     new Point(basex-4, basey - 10.0/256.0 * 500),
+                     new Scalar(255, 255, 0), 2);
+             Imgproc.line(outputColor,
+                     new Point(basex+257*2, basey),
+                     new Point(basex+257*2, basey - 10.0/256.0 * 500),
+                     new Scalar(255, 255, 0), 2);
+             for (int i = 0; i < histSize; i++) {
+                 Imgproc.line(outputColor,
+                         new Point(basex + i * 2, basey),
+                         new Point(basex + i * 2, basey - Math.log(histData[i] / histSum * 500)*20),
+                         new Scalar(255, 0, 0), 2);
+             }
+
+             /* Reduce exposure until we have no pixels > 200 */
+             float histSumSaturated = 0.0f;
+             float histSumMid = 0.0f;
+             for (int i = 100; i < 200; i++)
+                 histSumMid += histData[i];
+             for (int i = 200; i < histSize; i++)
+                 histSumSaturated += histData[i];
+             if (histSumMid < histSum/3)
+                 exposure = Math.min(exposure + 0.05, 1.0);
+             if (histSumSaturated >= 1)
+                 exposure = Math.max(exposure - 0.05, -1.0);
+             Imgproc.putText(outputColor, "<" + exposure + ">", new Point(outputColor.width()-200, outputColor.height()-50),
+                     Imgproc.FONT_HERSHEY_SIMPLEX, 2, new Scalar(255, 0, 0), 2);
+         }
+
+        /* End of compute histogram */
         inputGray.release();
 
         List<MatOfPoint> cnts = new ArrayList<MatOfPoint>();
@@ -326,19 +517,26 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         boolean found = false;
         /* FIXME: Ugly pass-through */
         MatOfPoint2f c2f = null;
-        Mat box = null;
         double angle = 0.0;
         for (MatOfPoint c: cnts) {
             c2f = new MatOfPoint2f(c.toArray());
             double peri = Imgproc.arcLength(c2f, true);
             RotatedRect rect = Imgproc.minAreaRect(c2f);
-            box = new Mat();
+            Mat box = new Mat();
             Imgproc.boxPoints(rect, box);
-            // TODO: box = numpy.int32(box)
             double h = rect.size.height;
             double w = rect.size.width;
             double rawangle = rect.angle;
-            if (h < 100 && w < 100)
+            /* We're looking for a well-centered rectangle. */
+            final int MINSIZE = 333;
+            final int MAXSIZE = 666;
+            final int MAXOFFCENTER = 250;
+            if (h < MINSIZE || w < MINSIZE)
+                continue;
+            if (h > MAXSIZE || w > MAXSIZE)
+                continue;
+            if (Math.abs(rect.center.x-500) > MAXOFFCENTER ||
+                Math.abs(rect.center.y-500) > MAXOFFCENTER)
                 continue;
 
             double ratio = (w > h) ? w/h : h/w;
@@ -355,17 +553,25 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             }
         }
 
+         // FIXME: c2f and angle are used below, be careful this is ugly
+
         Imgproc.drawContours(outputColor, cnts, -1, new Scalar(0,255,0), 1);
-        if (!found) {
+        Rect rect;
+        //found = false;  // FIXME: logic above often doesn't help...
+        if (found) {
+            rect = Imgproc.boundingRect(c2f);
+        } else {
+            rect = new Rect(250, 250, 500, 500);
+            angle = 0.0;
+            /*
             Mat output = new Mat();
             // TODO: Silly to resize back
             Imgproc.resize(outputColor, output, inputSize, 0, 0, Imgproc.INTER_AREA);
             outputColor.release();
             return output;
+             */
         }
 
-        // FIXME: c, angle, and box are used below, be careful this is ugly
-        Rect rect = Imgproc.boundingRect(c2f);
         Imgproc.rectangle(outputColor, rect, new Scalar(255,0,0), 5);
         rect.x *= origScale; rect.y *= origScale;
         rect.height *= origScale; rect.width *= origScale;
@@ -399,8 +605,26 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         Imgproc.resize(img_processed, destinationROI, overlaySize, 0, 0, Imgproc.INTER_AREA);
         //img_rot.copyTo(destinationROI);
 
+         /* Have we found a good readout yet? */
+         HashMap<String, Integer> pcount = new HashMap<String, Integer>();
+         for (String p: parsedText) {
+             if (p.length() == 0)
+                 continue;
+             int cnt = pcount.getOrDefault(p, 0)+1;
+             if (cnt > 10) {
+                 Imgproc.putText(output, "<" + p + ">", new Point(0, output.size().height-50),
+                         Imgproc.FONT_HERSHEY_SIMPLEX, 10, new Scalar(255, 0, 0), 30);
+                 this.runOnUiThread(() -> {
+                     (Toast.makeText(this, "Read out <" + p + ">!", Toast.LENGTH_LONG)).show();
+                     startStop(false);
+                 });
+                 break;
+             }
+             pcount.put(p, cnt);
+         }
+
         //Imgproc.resize(img_rot, output, inputSize, 0, 0, Imgproc.INTER_AREA);
-        img_processed.release();
+         img_processed.release();
         return output;
     }
 }

@@ -59,9 +59,9 @@ public class SmarterCameraView extends JavaCameraView implements Camera.PictureC
         Camera.Parameters params = mCamera.getParameters();
         int value;
         if (exposure > 0)
-            value = Math.round(- params.getMinExposureCompensation() * exposure);
+            value = (int)Math.round(- params.getMinExposureCompensation() * exposure);
         else
-            value = Math.round(params.getMaxExposureCompensation() * exposure);
+            value = (int)Math.round(params.getMaxExposureCompensation() * exposure);
         params.setExposureCompensation(value);
         mCamera.setParameters(params);
     }
