@@ -198,7 +198,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     }
 
     LinkedList<String> parsedText = new LinkedList<>();
-    private Mat findDigits(Mat input) {
+    private Mat findDigits(Mat input, double otsu) {
         /* TODO: original version needed 1000x1000 image... */
         Mat resizeInput = new Mat();
         Imgproc.resize(input, resizeInput, new Size(1000,1000), 0, 0, Imgproc.INTER_AREA);
@@ -209,7 +209,13 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         Imgproc.cvtColor(resizeInput, gray, Imgproc.COLOR_BGR2GRAY);
         // # TODO: Compute OTSU within display only
         Mat thresh = new Mat();
-        Imgproc.threshold(gray, thresh, 0, 255, Imgproc.THRESH_BINARY | Imgproc.THRESH_OTSU);
+        int flags = Imgproc.THRESH_BINARY;
+        if (Double.isNaN(otsu)) {
+            otsu = 0;
+            flags |= Imgproc.THRESH_OTSU;
+        }
+        Imgproc.threshold(gray, thresh, otsu, 255, flags);
+        Imgproc.cvtColor(gray, output, Imgproc.COLOR_GRAY2BGRA);
         gray.release();
         Mat int_thresh = new Mat();
         Imgproc.integral(thresh, int_thresh);
@@ -221,17 +227,10 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         Mat element = Imgproc.getStructuringElement(Imgproc.CV_SHAPE_RECT,
             new Size(2 * kernelSize + 1, 2 * kernelSize + 1),
                 new Point(kernelSize, kernelSize));
-        Mat tmp = new Mat();
-        Imgproc.erode(thresh, tmp, element);
-        //Imgproc.erode(tmp, thresh, element);
-        //Imgproc.erode(thresh, tmp, element);
-        Imgproc.dilate(tmp, thresh, element);
-        //Imgproc.dilate(thresh, tmp, element);
-        //Imgproc.dilate(tmp, thresh, element);
-        tmp.release();
+        Imgproc.morphologyEx(thresh, thresh, Imgproc.MORPH_OPEN, element);
 
-        output.release();
-        Imgproc.cvtColor(thresh, output, Imgproc.COLOR_GRAY2BGRA);
+        //output.release();
+        //Imgproc.cvtColor(thresh, output, Imgproc.COLOR_GRAY2BGRA);
 
         Imgproc.findContours(thresh, cnts, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
         Imgproc.drawContours(output, cnts, -1, new Scalar(0,255,0), 2);
@@ -524,12 +523,14 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             c2f = null;
         }
 
-        Mat contourmask = new Mat(inputSize, CvType.CV_8U);
+        Mat contourmask = new Mat(inputSize, CvType.CV_8U, new Scalar(0));
         if (c2f != null) {
             MatOfPoint c = new MatOfPoint();
             c2f.convertTo(c, CvType.CV_32S);
             List<MatOfPoint> ctmp = new LinkedList<>(); ctmp.add(c);
             Imgproc.drawContours(contourmask, ctmp, -1, new Scalar(255), Imgproc.FILLED);
+            Imgproc.drawContours(outputColor, ctmp, -1, new Scalar(255,0,0), 5);
+
         } else {
             // Just mask the rectangle
             Imgproc.rectangle(contourmask, rect, new Scalar(255), Imgproc.FILLED);
@@ -538,6 +539,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         Core.bitwise_not(contourmask, invcontourmask);
 
         float histAvg = 0.0f;
+        double otsu = Double.NaN;
          /* Compute histogram */
          {
              //inputGray = new Mat();
@@ -590,12 +592,51 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
              Imgproc.putText(outputColor, "" + exposure, new Point(outputColor.width()-300, outputColor.height()-50),
                      Imgproc.FONT_HERSHEY_SIMPLEX, 2, new Scalar(255, 0, 0), 2);
              inputGray.release();
+
+             /* Compute otsu threshold */
+             double mu = 0, scale = 1.0/histSum;
+             for(int i = 0; i < histData.length; i++ )
+             {
+                 mu += i*(double)histData[i];
+             }
+
+             mu *= scale;
+             double mu1 = 0, q1 = 0;
+             double max_sigma = 0, max_val = 0;
+
+             for(int i = 0; i < histData.length; i++ )
+             {
+                 double p_i, q2, mu2, sigma;
+
+                 p_i = histData[i]*scale;
+                 mu1 *= q1;
+                 q1 += p_i;
+                 q2 = 1. - q1;
+
+                 final double FLT_EPSILON = 1.19209290e-7;
+                 if( Math.min(q1,q2) < FLT_EPSILON || Math.max(q1,q2) > 1.0-FLT_EPSILON)
+                    continue;
+
+                 mu1 = (mu1 + i*p_i)/q1;
+                 mu2 = (mu - q1*mu1)/q2;
+                 sigma = q1*q2*(mu1 - mu2)*(mu1 - mu2);
+                 if( sigma > max_sigma )
+                 {
+                     max_sigma = sigma;
+                     max_val = i;
+                 }
+             }
+             otsu = max_val;
+             Imgproc.line(outputColor,
+                     new Point(basex + otsu * 2, basey),
+                     new Point(basex + otsu * 2, basey - 100),
+                     new Scalar(255, 128, 0), 2);
          }
 
          // Mask input with average value
          // TODO: would be better to compute otsu on masked region
-         inputColor.setTo(new Scalar(histAvg,histAvg,histAvg), invcontourmask);
-         //outputColor.setTo(new Scalar(histAvg,histAvg,histAvg), invcontourmask);
+         //inputColor.setTo(new Scalar(histAvg,histAvg,histAvg), invcontourmask);
+         //outputColor.setTo(new Scalar(255,200,200), invcontourmask);
 
          contourmask.release();
          invcontourmask.release();
@@ -622,7 +663,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             img_crop = img_rot[y:(y+h), x:(x+w)]
          */
 
-        Mat img_processed = findDigits(img_rot);
+        Mat img_processed = findDigits(img_rot, otsu);
 
         Mat output = new Mat();
         // TODO: Silly to resize back
