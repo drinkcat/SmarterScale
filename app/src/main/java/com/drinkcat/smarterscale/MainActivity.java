@@ -452,8 +452,11 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         inputColor.copyTo(outputColor);
 
         Mat thresh = new Mat();
-        Imgproc.threshold(inputGray, thresh, 0, 255, Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
-        //inputGray.release();
+        Imgproc.medianBlur(inputGray, thresh,5);
+         //Imgproc.threshold(inputGray, thresh, 0, 255, Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
+        Imgproc.adaptiveThreshold(thresh, thresh,255,Imgproc.ADAPTIVE_THRESH_MEAN_C,
+                Imgproc.THRESH_BINARY_INV,31,2);
+         //inputGray.release();
 
         List<MatOfPoint> cnts = new ArrayList<MatOfPoint>();
         Mat hierarchy = new Mat();
