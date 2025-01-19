@@ -164,7 +164,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         // For vertical segments, accept slightly non-overlapping segments
         // to catch digits like 0 and 1 that don't have a vertical segment
         // in the center
-        final double VERT_EXPAND_RATIO = 0.5;
+        final double VERT_EXPAND_RATIO = 1.0;
         double th = 0.0;
         if (a.width < a.height && b.width < b.height)
             th = - VERT_EXPAND_RATIO * o.width;
@@ -215,7 +215,9 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             flags |= Imgproc.THRESH_OTSU;
         }
         Imgproc.threshold(gray, thresh, otsu, 255, flags);
-        Imgproc.cvtColor(gray, output, Imgproc.COLOR_GRAY2BGRA);
+        //Imgproc.cvtColor(gray, output, Imgproc.COLOR_GRAY2BGRA);
+        output.release();
+        Imgproc.cvtColor(thresh, output, Imgproc.COLOR_GRAY2BGRA);
         gray.release();
         Mat int_thresh = new Mat();
         Imgproc.integral(thresh, int_thresh);
@@ -223,14 +225,28 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         List<MatOfPoint> cnts = new ArrayList<MatOfPoint>();
         Mat hierarchy = new Mat();
 
+        int kernelSize = 5;
+        Mat element = new Mat(2 * kernelSize + 1, 2 * kernelSize + 1, CvType.CV_8U, new Scalar(0));
+        for (int i = 0; i < element.rows(); i++) {
+            element.put(i, i, 1.0);
+            element.put(element.cols()-i-1, i, 1.0);
+        }
+
+        for (int i = 0; i < kernelSize; i++) {
+            byte[] data = new byte[kernelSize];
+            element.get(i, 0, data);
+            Log.d(TAG, "element i=" + i + ": " + Arrays.toString(data));
+        }
+        /*
         int kernelSize = 3;
         Mat element = Imgproc.getStructuringElement(Imgproc.CV_SHAPE_RECT,
             new Size(2 * kernelSize + 1, 2 * kernelSize + 1),
-                new Point(kernelSize, kernelSize));
-        Imgproc.morphologyEx(thresh, thresh, Imgproc.MORPH_OPEN, element);
+                new Point(kernelSize, kernelSize));*/
+        Imgproc.morphologyEx(thresh, thresh, Imgproc.MORPH_OPEN, element, new Point(-1, -1), 3);
 
-        //output.release();
-        //Imgproc.cvtColor(thresh, output, Imgproc.COLOR_GRAY2BGRA);
+        /* DISPLAY AFTER MORPHOLOGY */
+        output.release();
+        Imgproc.cvtColor(thresh, output, Imgproc.COLOR_GRAY2BGRA);
 
         Imgproc.findContours(thresh, cnts, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
         Imgproc.drawContours(output, cnts, -1, new Scalar(0,255,0), 2);
@@ -244,7 +260,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
             if (rect.width < 10 || rect.height < 10) {
                 //rectIgnore.add(rect);
-                //Log.d(TAG, "ignore too small: " + rect);
+                Log.d(TAG, "ignore too small: " + rect);
                 continue;
             }
 
@@ -252,7 +268,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                     rect.x + rect.width > thresh.size().width - 10 ||
                     rect.y + rect.height > thresh.size().height - 10) {
                 //rectIgnore.add(rect);
-                //Log.d(TAG, "ignore on the edge: " + rect + " // " + thresh.size());
+                Log.d(TAG, "ignore on the edge: " + rect + " // " + thresh.size());
                 continue;
             }
 
@@ -262,7 +278,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
             if (ratio > 1.1 && ratio < 2.0) {
                 rectIgnore.add(new TaggedRect(rect));
-                //Log.d(TAG, "ignore by ratio: " + rect + " / " + ratio);
+                Log.d(TAG, "ignore by ratio: " + rect + " / " + ratio);
                 continue;
             }
 
@@ -272,7 +288,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
             if (fillratio < 0.50) { // # Unlikely a segment?
                 rectIgnore.add(new TaggedRect(rect));
-                //Log.d(TAG, "ignore by fill ratio: " + rect + " // " + fillratio);
+                Log.d(TAG, "ignore by fill ratio: " + rect + " // " + fillratio);
                 continue;
             }
 
@@ -280,7 +296,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                 rectGood.add(new TaggedRect(rect));
             else
                 rectDot.add(new TaggedRect(rect));
-            //Log.d(TAG, "good: " + rect + " / " + ratio + " // " + fillratio);
+            Log.d(TAG, "good: " + rect + " / " + ratio + " // " + fillratio);
         }
 
         for (Rect rect: rectIgnore)
