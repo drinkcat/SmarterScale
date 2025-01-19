@@ -22,6 +22,7 @@ import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfFloat;
 import org.opencv.core.MatOfInt;
@@ -436,43 +437,23 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             mOpenCvCameraView.setExposureLock(false);
             mOpenCvCameraView.setExposure(exposure);
         } else if (fcount >= 5) {
-            mOpenCvCameraView.setExposureLock(true);
+            //mOpenCvCameraView.setExposureLock(true);
             mOpenCvCameraView.setExposure(exposure);
         }
         fcount++;
-        if (fcount > 50)
+        if (fcount > 100)
             fcount = 0;
 
+        // FIXME: This assumes dimension is close to 1000x1000
         Mat inputColor = inputFrame.rgba();
+        Mat inputGray = inputFrame.gray();
         Size inputSize = inputColor.size();
-        Mat outputColor = new Mat();
+        Mat outputColor = new Mat(); /* output color frame that includes drawn shapes. */
+        inputColor.copyTo(outputColor);
 
-        Mat inputGray = new Mat();
-        // TODO: okay to assume square input?
-        // TODO: Pick a good dimension at input
-        double origScale = inputSize.height/1000.0;
-        // TODO: Silly to resize twice
-        Imgproc.resize(inputFrame.gray(), inputGray, new Size(), 1.0/origScale, 1.0/origScale, Imgproc.INTER_AREA);
-        Imgproc.resize(inputColor, outputColor, new Size(), 1.0/origScale, 1.0/origScale, Imgproc.INTER_AREA);
-/*
-        Mat lines = new Mat();
-        Imgproc.HoughLinesP(inputGray, lines, 1, Math.PI/180, 50);
-         for (int i = 0; i < lines.cols(); i++) {
-             double[] val = lines.get(0, i);
-             Imgproc.line(outputColor, new Point(val[0], val[1]), new Point(val[2], val[3]), new Scalar(0, 0, 255), 2);
-         }
-*/
         Mat thresh = new Mat();
-        // Canny alternative
-         if (false) {
-             Mat blurred = new Mat();
-             Imgproc.GaussianBlur(inputGray, blurred, new Size(3, 3), 3.0, 0);
-             Imgproc.Canny(blurred, thresh, 150, 200);
-             blurred.release();
-         } else {
-             Imgproc.threshold(inputGray, thresh, 0, 255, Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
-         }
-        inputGray.release();
+        Imgproc.threshold(inputGray, thresh, 0, 255, Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
+        //inputGray.release();
 
         List<MatOfPoint> cnts = new ArrayList<MatOfPoint>();
         Mat hierarchy = new Mat();
@@ -481,7 +462,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
         // FIXME: This is ugly, I'm computing contourArea over and over again.
         cnts.sort(Comparator.comparingDouble((Mat c) -> Imgproc.contourArea(c)).reversed());
-        //cnts = sorted(cnts, key=cv2.contourArea, reverse=True)
 
         boolean found = false;
         /* FIXME: Ugly pass-through */
@@ -496,16 +476,17 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             double h = rect.size.height;
             double w = rect.size.width;
             double rawangle = rect.angle;
+
             /* We're looking for a well-centered rectangle. */
-            final int MINSIZE = 333;
-            final int MAXSIZE = 666;
-            final int MAXOFFCENTER = 250;
+            final double MINSIZE = 0.33 * inputSize.width;
+            final double MAXSIZE = 0.66 * inputSize.width;
+            final double MAXOFFCENTER = 0.25 * inputSize.width;
             if (h < MINSIZE || w < MINSIZE)
                 continue;
             if (h > MAXSIZE || w > MAXSIZE)
                 continue;
-            if (Math.abs(rect.center.x-500) > MAXOFFCENTER ||
-                Math.abs(rect.center.y-500) > MAXOFFCENTER)
+            if (Math.abs(rect.center.x-inputSize.width/2) > MAXOFFCENTER ||
+                Math.abs(rect.center.y-inputSize.height/2) > MAXOFFCENTER)
                 continue;
 
             double ratio = (w > h) ? w/h : h/w;
@@ -514,77 +495,64 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                 angle = 90 - rawangle;
             else
                 angle = rawangle;
+
             // TODO: Find the best one instead?
             Log.d(TAG, "h/w:" + h + "x" + w + "; angle=" + rawangle + "=>" + angle);
-            if (h > 100 && w > 100 && ratio < 1.5 && Math.abs(angle) < 30 ) {
+            if (ratio < 1.5 && Math.abs(angle) < 30) {
                 found = true;
                 break;
             }
         }
 
-         // FIXME: c2f and angle are used below, be careful this is ugly
-
+        // FIXME: c2f and angle are used below, be careful this is ugly
         Imgproc.drawContours(outputColor, cnts, -1, new Scalar(0,255,0), 3);
         Rect rect;
-        //found = false;  // FIXME: logic above often doesn't help...
         if (found) {
             rect = Imgproc.boundingRect(c2f);
         } else {
-            rect = new Rect(250, 250, 500, 500);
+            int rectSize = (int)(0.66*inputSize.width);
+            rect = new Rect(
+                    (int)(inputSize.width-rectSize)/2, (int)(inputSize.height-rectSize)/2,
+                    rectSize, rectSize);
             angle = 0.0;
             c2f = null;
         }
 
-        Imgproc.rectangle(outputColor, rect, new Scalar(255,0,0), 5);
-        rect.x *= origScale; rect.y *= origScale;
-        rect.height *= origScale; rect.width *= origScale;
-        Mat img_crop = new Mat(inputColor, rect);
-
-        Mat M = Imgproc.getRotationMatrix2D(new Point(rect.width/2, rect.height/2), -angle, 1.0);
-        Mat img_rot = new Mat();
-        Imgproc.warpAffine(img_crop, img_rot, M, rect.size());
-        img_crop.release();
-
-        /* Mask the outside of the contour */
+        Mat contourmask = new Mat(inputSize, CvType.CV_8U);
         if (c2f != null) {
-            MatOfPoint2f transc2f = new MatOfPoint2f();
-            c2f.convertTo(transc2f, -1, origscale);
-            MatOfPoint2f rotc2f = new MatOfPoint2f();
-            Core.transform(transc2f, rotc2f, M);
-            MatOfPoint c = new MatOfPoint(rotc2f.toArray());
-            LinkedList<MatOfPoint> clist = new LinkedList<MatOfPoint>();
-            clist.add(c);
-            Imgproc.drawContours(img_rot, clist, -1, new Scalar(255), 20);
+            MatOfPoint c = new MatOfPoint();
+            c2f.convertTo(c, CvType.CV_32S);
+            List<MatOfPoint> ctmp = new LinkedList<>(); ctmp.add(c);
+            Imgproc.drawContours(contourmask, ctmp, -1, new Scalar(255), Imgproc.FILLED);
+        } else {
+            // Just mask the rectangle
+            Imgproc.rectangle(contourmask, rect, new Scalar(255), Imgproc.FILLED);
         }
+        Mat invcontourmask = new Mat();
+        Core.bitwise_not(contourmask, invcontourmask);
 
-        /* TODO: second round of cropping
-            # rotate contour
-            pts = numpy.int32(cv2.transform(numpy.array(c), M))
-            #cv2.drawContours(img_rot,[pts],0,(0,255,255),2)
-            rect = cv2.boundingRect(pts)
-
-            # crop
-            #
-            (x, y, w, h) = rect
-            img_crop = img_rot[y:(y+h), x:(x+w)]
-         */
-
+        float histAvg = 0.0f;
          /* Compute histogram */
          {
-             inputGray = new Mat();
-             Imgproc.cvtColor(img_rot, inputGray, Imgproc.COLOR_BGR2GRAY);
+             //inputGray = new Mat();
+             //Imgproc.cvtColor(img_rot, inputGray, Imgproc.COLOR_BGR2GRAY);
              int histSize = 256;
              MatOfFloat histRange = new MatOfFloat(new float[]{0, 256});
              Mat hist = new Mat();
              List<Mat> inputGrayList = new LinkedList<>();
              inputGrayList.add(inputGray);
-             Imgproc.calcHist(inputGrayList, new MatOfInt(0), new Mat(), hist, new MatOfInt(histSize), histRange, false);
+             Imgproc.calcHist(inputGrayList, new MatOfInt(0), contourmask, hist, new MatOfInt(histSize), histRange, false);
              float[] histData = new float[(int) (hist.total() * hist.channels())];
              hist.get(0, 0, histData);
              float histSum = 0.0f;
-             for (float f : histData)
-                 histSum += f;
-             //Log.d(TAG, "hist " + histSize + ":" + Arrays.toString(histData));
+             histAvg = 0.0f;
+             for (int i = 0; i < histSize; i++) {
+                 histSum += histData[i];
+                 histAvg += i*histData[i];
+             }
+             histAvg /= histSize;
+
+             Log.d(TAG, "hist " + histSize + ":" + Arrays.toString(histData));
              final int basex = outputColor.width() - 256 * 2 - 10;
              final int basey = outputColor.height();
              Imgproc.line(outputColor,
@@ -610,7 +578,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
              for (int i = 200; i < histSize; i++)
                  histSumSaturated += histData[i];
              if (histSumMid < histSum/3)
-                 exposure = Math.min(exposure + 0.02, 1.0);
+                 exposure = Math.min(exposure + 0.03, 1.0);
              if (histSumSaturated >= 1)
                  exposure = Math.max(exposure - 0.05, -1.0);
              Imgproc.putText(outputColor, "" + exposure, new Point(outputColor.width()-300, outputColor.height()-50),
@@ -618,7 +586,35 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
              inputGray.release();
          }
 
+         // Mask input with average value
+         // TODO: would be better to compute otsu on masked region
+         inputColor.setTo(new Scalar(histAvg,histAvg,histAvg), invcontourmask);
+         //outputColor.setTo(new Scalar(histAvg,histAvg,histAvg), invcontourmask);
+
+         contourmask.release();
+         invcontourmask.release();
+
          /* End of compute histogram */
+
+         Imgproc.rectangle(outputColor, rect, new Scalar(255,0,0), 5);
+         Mat img_crop = new Mat(inputColor, rect);
+
+         Mat M = Imgproc.getRotationMatrix2D(new Point(rect.width/2, rect.height/2), -angle, 1.0);
+         Mat img_rot = new Mat();
+         Imgproc.warpAffine(img_crop, img_rot, M, rect.size());
+         img_crop.release();
+
+        /* TODO: second round of cropping
+            # rotate contour
+            pts = numpy.int32(cv2.transform(numpy.array(c), M))
+            #cv2.drawContours(img_rot,[pts],0,(0,255,255),2)
+            rect = cv2.boundingRect(pts)
+
+            # crop
+            #
+            (x, y, w, h) = rect
+            img_crop = img_rot[y:(y+h), x:(x+w)]
+         */
 
         Mat img_processed = findDigits(img_rot);
 

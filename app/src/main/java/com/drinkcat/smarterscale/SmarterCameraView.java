@@ -2,6 +2,8 @@ package com.drinkcat.smarterscale;
 
 import java.io.FileOutputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 
@@ -12,6 +14,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Rect;
 import android.hardware.Camera;
 import android.hardware.Camera.PictureCallback;
 import android.hardware.Camera.Size;
@@ -63,6 +66,12 @@ public class SmarterCameraView extends JavaCameraView implements Camera.PictureC
         else
             value = (int)Math.round(params.getMaxExposureCompensation() * exposure);
         params.setExposureCompensation(value);
+
+        // HACK: That doesn't do much?!
+        List<Camera.Area> meteringAreas = new LinkedList<>();
+        meteringAreas.add(new Camera.Area(new Rect(-100, -100, 100, 100), 100));
+        params.setMeteringAreas(meteringAreas);
+
         mCamera.setParameters(params);
     }
 
