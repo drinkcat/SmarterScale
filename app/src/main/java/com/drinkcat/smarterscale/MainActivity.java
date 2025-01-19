@@ -450,10 +450,10 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
         if (fcount == 0) {
             mOpenCvCameraView.setExposureLock(false);
-            mOpenCvCameraView.setExposure(exposure);
+            //mOpenCvCameraView.setExposure(exposure);
         } else if (fcount >= 5) {
             //mOpenCvCameraView.setExposureLock(true);
-            mOpenCvCameraView.setExposure(exposure);
+            //mOpenCvCameraView.setExposure(exposure);
         }
         fcount++;
         if (fcount > 100)
@@ -469,11 +469,11 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         Mat thresh = new Mat();
         Imgproc.medianBlur(inputGray, thresh,5);
          //Imgproc.threshold(inputGray, thresh, 0, 255, Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
-        int blockSize = (int)(0.1 * inputSize.width);
+        int blockSize = (int)(0.05 * inputSize.width);
         if ((blockSize % 2) == 0)
             blockSize += 1;
         Imgproc.adaptiveThreshold(thresh, thresh,255,Imgproc.ADAPTIVE_THRESH_MEAN_C,
-                Imgproc.THRESH_BINARY_INV, blockSize,2);
+                Imgproc.THRESH_BINARY_INV, blockSize,1);
          //inputGray.release();
 
         List<MatOfPoint> cnts = new ArrayList<MatOfPoint>();
