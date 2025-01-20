@@ -284,7 +284,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             groups.add(group);
         }
 
-        /* Could be initialized only once */
+        /* TODO: This could be initialized only once */
         HashMap<Integer,String> DIGITMAP = new HashMap<Integer, String>();
         DIGITMAP.put(sigArrayToSig(new int[]{1, 0, 1, 1, 1, 1, 1}), "0");
         DIGITMAP.put(sigArrayToSig(new int[]{0, 0, 0, 1, 0, 1, 0}), "1");
@@ -362,6 +362,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         Size inputSize = inputColor.size();
         Mat output = new Mat(); /* output color frame that includes drawn shapes. */
         inputColor.copyTo(output);
+        inputColor.release();
 
         Mat thresh = new Mat();
         final double MEDIAN_BLUR_SIZE = 0.002; /* Meant to be 5px for 1000px input */
@@ -370,6 +371,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         if ((medianBlurSize % 2) == 0)
             medianBlurSize += 1;
         Imgproc.medianBlur(inputGray, thresh, medianBlurSize);
+        inputGray.release();
         int blockSize = (int)(ADAPTIVE_THRESHOLD_SIZE * inputSize.width);
         if ((blockSize % 2) == 0)
             blockSize += 1;
@@ -382,11 +384,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             element.put(i, i, 1.0);
             element.put(element.cols()-i-1, i, 1.0);
         }
-        /*
-        int kernelSize = 2;
-        Mat element = Imgproc.getStructuringElement(Imgproc.CV_SHAPE_ELLIPSE,
-            new Size(2 * kernelSize + 1, 2 * kernelSize + 1),
-                new Point(kernelSize, kernelSize));*/
         Imgproc.morphologyEx(thresh, thresh, Imgproc.MORPH_OPEN, element, new Point(-1, -1), 2);
 
         List<MatOfPoint> cnts = new ArrayList<MatOfPoint>();
@@ -410,6 +407,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         Imgproc.drawContours(output, cnts, -1, new Scalar(0,128,0), 2);
 
         findDigits(output, int_thresh, cnts);
+        int_thresh.release();
 
         /* Have we found a good readout yet? */
         HashMap<String, Integer> pcount = new HashMap<String, Integer>();
