@@ -302,7 +302,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             Rect u = null;
             for (Rect r : group)
                 u = union(u, r);
-            Imgproc.rectangle(output, u, new Scalar(255, 0, 255), 10);
+            Imgproc.rectangle(output, u, new Scalar(255, 0, 255), 5);
             int[] sigarray = new int[7];
             for (Rect r : group) {
                 int sx = (int)Math.round(1.0 * (r.x - u.x) / u.width);
@@ -336,7 +336,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         Log.d(TAG, "Parsed: " + s);
 
         Imgproc.putText(output, s, new Point(0, output.size().height),
-                Imgproc.FONT_HERSHEY_SIMPLEX, 10, new Scalar(128, 128, 255), 10);
+                Imgproc.FONT_HERSHEY_SIMPLEX, 5, new Scalar(128, 128, 255), 5);
 
         // TODO: Using a circular buffer would be better...
         parsedText.addFirst(s);
@@ -358,11 +358,19 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         }
 
         Mat inputColor = inputFrame.rgba();
-        Mat inputGray = inputFrame.gray();
         Size inputSize = inputColor.size();
-        Mat output = new Mat(); /* output color frame that includes drawn shapes. */
-        inputColor.copyTo(output);
+
+        final double ROI_SIZE = 0.66;
+        int roi_size = (int)(Math.min(inputSize.width, inputSize.height) * ROI_SIZE);
+        Rect crop = new Rect(
+                (int)(inputSize.width - roi_size)/2, (int)(inputSize.height - roi_size)/ 2,
+                roi_size, roi_size);
+
+        Mat inputGray = inputFrame.gray().submat(crop);
+        Mat outputFull = new Mat(); /* output color frame that includes drawn shapes. */
+        inputColor.copyTo(outputFull);
         inputColor.release();
+        Mat output = outputFull.submat(crop);
 
         Mat thresh = new Mat();
         final double MEDIAN_BLUR_SIZE = 0.002; /* Meant to be 5px for 1000px input */
@@ -396,18 +404,18 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         // FIXME: This is ugly, I'm computing contourArea over and over again.
         cnts.sort(Comparator.comparingDouble((Mat c) -> Imgproc.contourArea(c)).reversed());
 
-        /* Guiding rectangle for the user. */
-        Rect rect = new Rect((int)(inputSize.width*0.25), (int)(inputSize.height*(0.5-MIN_ASSUMED_HEIGHT/2)),
-                (int)(inputSize.width*0.5), (int)(inputSize.height*MIN_ASSUMED_HEIGHT));
-        Imgproc.rectangle(output, rect, new Scalar(255,0,0), (int)(0.005*inputSize.width));
-        rect = new Rect((int)(inputSize.width*0.25), (int)(inputSize.height*(0.5-MAX_ASSUMED_HEIGHT/2)),
-                (int)(inputSize.width*0.5), (int)(inputSize.height*MAX_ASSUMED_HEIGHT));
-        Imgproc.rectangle(output, rect, new Scalar(255,0,0), (int)(0.005*inputSize.width));
-
         Imgproc.drawContours(output, cnts, -1, new Scalar(0,128,0), 2);
 
         findDigits(output, int_thresh, cnts);
         int_thresh.release();
+
+        /* Guiding rectangle for the user. */
+        int min_height = (int)(inputSize.height*MIN_ASSUMED_HEIGHT);
+        int max_height = (int)(inputSize.height*MAX_ASSUMED_HEIGHT);
+        Rect rect = new Rect(crop.x, (int)(inputSize.height-min_height)/2, crop.width, min_height);
+        Imgproc.rectangle(outputFull, rect, new Scalar(255,0,0), (int)(0.005*inputSize.width));
+        rect = new Rect(crop.x, (int)(inputSize.height-max_height)/2, crop.width, max_height);
+        Imgproc.rectangle(outputFull, rect, new Scalar(255,0,0), (int)(0.005*inputSize.width));
 
         /* Have we found a good readout yet? */
         HashMap<String, Integer> pcount = new HashMap<String, Integer>();
@@ -416,7 +424,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                 continue;
             int cnt = pcount.getOrDefault(p, 0)+1;
             if (cnt > 10) {
-                Imgproc.putText(output, ">" + p, new Point(0, output.size().height-50),
+                Imgproc.putText(outputFull, ">" + p, new Point(0, outputFull.size().height-50),
                         Imgproc.FONT_HERSHEY_SIMPLEX, 10, new Scalar(255, 0, 0), 30);
                 this.runOnUiThread(() -> {
                     (Toast.makeText(this, "Read out <" + p + ">!", Toast.LENGTH_LONG)).show();
@@ -427,6 +435,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             pcount.put(p, cnt);
         }
 
-        return output;
+        return outputFull;
     }
 }
