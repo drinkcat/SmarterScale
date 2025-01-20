@@ -113,7 +113,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     public void startStop(boolean start) {
         if (start) {
             init = false;
-            fcount = 0;
             parsedText.clear();
             mOpenCvCameraView.enableView();
         } else {
@@ -197,60 +196,12 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         return sig;
     }
 
+    /* We want to find digits that take 20-35% of the image height. */
+    final double MIN_ASSUMED_HEIGHT = 0.20;
+    final double MAX_ASSUMED_HEIGHT = 0.35;
+
     LinkedList<String> parsedText = new LinkedList<>();
-    private Mat findDigits(Mat input, double otsu) {
-        /* TODO: original version needed 1000x1000 image... */
-        Mat resizeInput = new Mat();
-        Imgproc.resize(input, resizeInput, new Size(1000,1000), 0, 0, Imgproc.INTER_AREA);
-
-        Mat output = resizeInput;
-
-        Mat gray = new Mat();
-        Imgproc.cvtColor(resizeInput, gray, Imgproc.COLOR_BGR2GRAY);
-        // # TODO: Compute OTSU within display only
-        Mat thresh = new Mat();
-        int flags = Imgproc.THRESH_BINARY;
-        if (Double.isNaN(otsu)) {
-            otsu = 0;
-            flags |= Imgproc.THRESH_OTSU;
-        }
-        Imgproc.threshold(gray, thresh, otsu, 255, flags);
-        //Imgproc.cvtColor(gray, output, Imgproc.COLOR_GRAY2BGRA);
-        output.release();
-        Imgproc.cvtColor(thresh, output, Imgproc.COLOR_GRAY2BGRA);
-        gray.release();
-        Mat int_thresh = new Mat();
-        Imgproc.integral(thresh, int_thresh);
-
-        List<MatOfPoint> cnts = new ArrayList<MatOfPoint>();
-        Mat hierarchy = new Mat();
-
-        int kernelSize = 5;
-        Mat element = new Mat(2 * kernelSize + 1, 2 * kernelSize + 1, CvType.CV_8U, new Scalar(0));
-        for (int i = 0; i < element.rows(); i++) {
-            element.put(i, i, 1.0);
-            element.put(element.cols()-i-1, i, 1.0);
-        }
-
-        for (int i = 0; i < kernelSize; i++) {
-            byte[] data = new byte[kernelSize];
-            element.get(i, 0, data);
-            Log.d(TAG, "element i=" + i + ": " + Arrays.toString(data));
-        }
-        /*
-        int kernelSize = 3;
-        Mat element = Imgproc.getStructuringElement(Imgproc.CV_SHAPE_RECT,
-            new Size(2 * kernelSize + 1, 2 * kernelSize + 1),
-                new Point(kernelSize, kernelSize));*/
-        Imgproc.morphologyEx(thresh, thresh, Imgproc.MORPH_OPEN, element, new Point(-1, -1), 3);
-
-        /* DISPLAY AFTER MORPHOLOGY */
-        output.release();
-        Imgproc.cvtColor(thresh, output, Imgproc.COLOR_GRAY2BGRA);
-
-        Imgproc.findContours(thresh, cnts, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
-        Imgproc.drawContours(output, cnts, -1, new Scalar(0,255,0), 2);
-
+    private void findDigits(Mat output, Mat int_thresh, List<MatOfPoint> cnts) {
         LinkedList<TaggedRect> rectIgnore = new LinkedList<TaggedRect>();
         LinkedList<TaggedRect> rectGood = new LinkedList<TaggedRect>(); // Vertical and horizontal segments
         LinkedList<TaggedRect> rectDot = new LinkedList<TaggedRect>(); // Dots
@@ -260,23 +211,15 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
             if (rect.width < 10 || rect.height < 10) {
                 //rectIgnore.add(rect);
-                Log.d(TAG, "ignore too small: " + rect);
-                continue;
-            }
-
-            if (rect.x < 10 || rect.y < 10 ||
-                    rect.x + rect.width > thresh.size().width - 10 ||
-                    rect.y + rect.height > thresh.size().height - 10) {
-                //rectIgnore.add(rect);
-                Log.d(TAG, "ignore on the edge: " + rect + " // " + thresh.size());
+                //Log.d(TAG, "ignore too small: " + rect);
                 continue;
             }
 
             double h = rect.height;
             double w = rect.width;
-            double ratio = (w > h) ? w/h : h/w;
+            double ratio = (w > h) ? w / h : h / w;
 
-            if (ratio > 1.1 && ratio < 2.0) {
+            if ((ratio > 1.1 && ratio < 1.8) || ratio > 5.0) {
                 rectIgnore.add(new TaggedRect(rect));
                 Log.d(TAG, "ignore by ratio: " + rect + " / " + ratio);
                 continue;
@@ -286,27 +229,29 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             double rect_area = rect.area();
             double fillratio = area / rect_area / 255;
 
-            if (fillratio < 0.50) { // # Unlikely a segment?
+            if (fillratio < 0.80) { // # Unlikely a segment/dot
                 rectIgnore.add(new TaggedRect(rect));
                 Log.d(TAG, "ignore by fill ratio: " + rect + " // " + fillratio);
                 continue;
             }
 
-            if (ratio > 2.0)
-                rectGood.add(new TaggedRect(rect));
-            else
+            if (ratio < 1.1) {
                 rectDot.add(new TaggedRect(rect));
+            } else {
+                rectGood.add(new TaggedRect(rect));
+            }
+
             Log.d(TAG, "good: " + rect + " / " + ratio + " // " + fillratio);
         }
 
         for (Rect rect: rectIgnore)
-            Imgproc.rectangle(output, rect, new Scalar(255,0,0), 3);
+            Imgproc.rectangle(output, rect, new Scalar(127,0,0), 3);
 
         for (Rect rect: rectGood)
             Imgproc.rectangle(output, rect, new Scalar(0,0,255), 3);
 
         for (Rect rect: rectDot)
-            Imgproc.rectangle(output, rect, new Scalar(0,255,255), 10);
+            Imgproc.rectangle(output, rect, new Scalar(0,255,255), 3);
 
         LinkedList<List<Rect>> groups = new LinkedList<List<Rect>>();
 
@@ -430,288 +375,93 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         parsedText.addFirst(s);
         while (parsedText.size() > 30)
             parsedText.removeLast();
-
-        return output;
     }
 
     boolean init = false;
 
-    int fcount = 0;
-    double exposure = 0.0f;
-     @Override
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
         // FIXME: we like zoom, zoomies!
+        // TODO: Remember zoom level, manually crop more if needed.
         if (!init) {
             List<Integer> zooms = mOpenCvCameraView.getZoomRatios();
             mOpenCvCameraView.setZoom(zooms.size() - 1);
+            mOpenCvCameraView.setExposure(0.0);
             init = true;
             return inputFrame.rgba();
         }
 
-        if (fcount == 0) {
-            mOpenCvCameraView.setExposureLock(false);
-            //mOpenCvCameraView.setExposure(exposure);
-        } else if (fcount >= 5) {
-            //mOpenCvCameraView.setExposureLock(true);
-            //mOpenCvCameraView.setExposure(exposure);
-        }
-        fcount++;
-        if (fcount > 100)
-            fcount = 0;
-
-        // FIXME: This assumes dimension is close to 1000x1000
         Mat inputColor = inputFrame.rgba();
         Mat inputGray = inputFrame.gray();
         Size inputSize = inputColor.size();
-        Mat outputColor = new Mat(); /* output color frame that includes drawn shapes. */
-        inputColor.copyTo(outputColor);
+        Mat output = new Mat(); /* output color frame that includes drawn shapes. */
+        inputColor.copyTo(output);
 
         Mat thresh = new Mat();
-        Imgproc.medianBlur(inputGray, thresh,5);
-         //Imgproc.threshold(inputGray, thresh, 0, 255, Imgproc.THRESH_BINARY_INV | Imgproc.THRESH_OTSU);
-        int blockSize = (int)(0.05 * inputSize.width);
+        final double MEDIAN_BLUR_SIZE = 0.002; /* Meant to be 5px for 1000px input */
+        final double ADAPTIVE_THRESHOLD_SIZE = 0.03; /* Meant to be ~50px for 1000px input */
+        int medianBlurSize = (int)(MEDIAN_BLUR_SIZE * inputSize.width);
+        if ((medianBlurSize % 2) == 0)
+            medianBlurSize += 1;
+        Imgproc.medianBlur(inputGray, thresh, medianBlurSize);
+        int blockSize = (int)(ADAPTIVE_THRESHOLD_SIZE * inputSize.width);
         if ((blockSize % 2) == 0)
             blockSize += 1;
         Imgproc.adaptiveThreshold(thresh, thresh,255,Imgproc.ADAPTIVE_THRESH_MEAN_C,
-                Imgproc.THRESH_BINARY_INV, blockSize,1);
-         //inputGray.release();
+                Imgproc.THRESH_BINARY, blockSize,1);
+
+        int kernelSize = 3;
+        Mat element = new Mat(2 * kernelSize + 1, 2 * kernelSize + 1, CvType.CV_8U, new Scalar(0));
+        for (int i = 0; i < element.rows(); i++) {
+            element.put(i, i, 1.0);
+            element.put(element.cols()-i-1, i, 1.0);
+        }
+        /*
+        int kernelSize = 2;
+        Mat element = Imgproc.getStructuringElement(Imgproc.CV_SHAPE_ELLIPSE,
+            new Size(2 * kernelSize + 1, 2 * kernelSize + 1),
+                new Point(kernelSize, kernelSize));*/
+        Imgproc.morphologyEx(thresh, thresh, Imgproc.MORPH_OPEN, element, new Point(-1, -1), 2);
 
         List<MatOfPoint> cnts = new ArrayList<MatOfPoint>();
         Mat hierarchy = new Mat();
         Imgproc.findContours(thresh, cnts, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
+        Mat int_thresh = new Mat();
+        Imgproc.integral(thresh, int_thresh);
         thresh.release();
 
         // FIXME: This is ugly, I'm computing contourArea over and over again.
         cnts.sort(Comparator.comparingDouble((Mat c) -> Imgproc.contourArea(c)).reversed());
 
-        boolean found = false;
-        /* FIXME: Ugly pass-through */
-        MatOfPoint2f c2f = null;
-        double angle = 0.0;
-        for (MatOfPoint c: cnts) {
-            c2f = new MatOfPoint2f(c.toArray());
-            double peri = Imgproc.arcLength(c2f, true);
-            RotatedRect rect = Imgproc.minAreaRect(c2f);
-            Mat box = new Mat();
-            Imgproc.boxPoints(rect, box);
-            double h = rect.size.height;
-            double w = rect.size.width;
-            double rawangle = rect.angle;
+        /* Guiding rectangle for the user. */
+        Rect rect = new Rect((int)(inputSize.width*0.25), (int)(inputSize.height*(0.5-MIN_ASSUMED_HEIGHT/2)),
+                (int)(inputSize.width*0.5), (int)(inputSize.height*MIN_ASSUMED_HEIGHT));
+        Imgproc.rectangle(output, rect, new Scalar(255,0,0), (int)(0.005*inputSize.width));
+        rect = new Rect((int)(inputSize.width*0.25), (int)(inputSize.height*(0.5-MAX_ASSUMED_HEIGHT/2)),
+                (int)(inputSize.width*0.5), (int)(inputSize.height*MAX_ASSUMED_HEIGHT));
+        Imgproc.rectangle(output, rect, new Scalar(255,0,0), (int)(0.005*inputSize.width));
 
-            /* We're looking for a well-centered rectangle. */
-            final double MINSIZE = 0.33 * inputSize.width;
-            final double MAXSIZE = 0.66 * inputSize.width;
-            final double MAXOFFCENTER = 0.25 * inputSize.width;
-            if (h < MINSIZE || w < MINSIZE)
-                continue;
-            if (h > MAXSIZE || w > MAXSIZE)
-                continue;
-            if (Math.abs(rect.center.x-inputSize.width/2) > MAXOFFCENTER ||
-                Math.abs(rect.center.y-inputSize.height/2) > MAXOFFCENTER)
-                continue;
+        Imgproc.drawContours(output, cnts, -1, new Scalar(0,128,0), 3);
 
-            double ratio = (w > h) ? w/h : h/w;
-            /* Angle will be between 0 and 90 */
-            if (rawangle > 45.0)
-                angle = 90 - rawangle;
-            else
-                angle = rawangle;
+        findDigits(output, int_thresh, cnts);
 
-            // TODO: Find the best one instead?
-            Log.d(TAG, "h/w:" + h + "x" + w + "; angle=" + rawangle + "=>" + angle);
-            if (ratio < 1.5 && Math.abs(angle) < 30) {
-                found = true;
+        /* Have we found a good readout yet? */
+        HashMap<String, Integer> pcount = new HashMap<String, Integer>();
+        for (String p: parsedText) {
+            if (p.length() == 0)
+                continue;
+            int cnt = pcount.getOrDefault(p, 0)+1;
+            if (cnt > 10) {
+                Imgproc.putText(output, ">" + p, new Point(0, output.size().height-50),
+                        Imgproc.FONT_HERSHEY_SIMPLEX, 10, new Scalar(255, 0, 0), 30);
+                this.runOnUiThread(() -> {
+                    (Toast.makeText(this, "Read out <" + p + ">!", Toast.LENGTH_LONG)).show();
+                    startStop(false);
+                });
                 break;
             }
+            pcount.put(p, cnt);
         }
 
-        // FIXME: c2f and angle are used below, be careful this is ugly
-        Imgproc.drawContours(outputColor, cnts, -1, new Scalar(0,255,0), 3);
-        Rect rect;
-        if (found) {
-            rect = Imgproc.boundingRect(c2f);
-        } else {
-            int rectSize = (int)(0.66*inputSize.width);
-            rect = new Rect(
-                    (int)(inputSize.width-rectSize)/2, (int)(inputSize.height-rectSize)/2,
-                    rectSize, rectSize);
-            angle = 0.0;
-            c2f = null;
-        }
-
-        Mat contourmask = new Mat(inputSize, CvType.CV_8U, new Scalar(0));
-        if (c2f != null) {
-            MatOfPoint c = new MatOfPoint();
-            c2f.convertTo(c, CvType.CV_32S);
-            List<MatOfPoint> ctmp = new LinkedList<>(); ctmp.add(c);
-            Imgproc.drawContours(contourmask, ctmp, -1, new Scalar(255), Imgproc.FILLED);
-            Imgproc.drawContours(outputColor, ctmp, -1, new Scalar(255,0,0), 5);
-
-        } else {
-            // Just mask the rectangle
-            Imgproc.rectangle(contourmask, rect, new Scalar(255), Imgproc.FILLED);
-        }
-        Mat invcontourmask = new Mat();
-        Core.bitwise_not(contourmask, invcontourmask);
-
-        float histAvg = 0.0f;
-        double otsu = Double.NaN;
-         /* Compute histogram */
-         {
-             //inputGray = new Mat();
-             //Imgproc.cvtColor(img_rot, inputGray, Imgproc.COLOR_BGR2GRAY);
-             int histSize = 256;
-             MatOfFloat histRange = new MatOfFloat(new float[]{0, 256});
-             Mat hist = new Mat();
-             List<Mat> inputGrayList = new LinkedList<>();
-             inputGrayList.add(inputGray);
-             Imgproc.calcHist(inputGrayList, new MatOfInt(0), contourmask, hist, new MatOfInt(histSize), histRange, false);
-             float[] histData = new float[(int) (hist.total() * hist.channels())];
-             hist.get(0, 0, histData);
-             float histSum = 0.0f;
-             histAvg = 0.0f;
-             for (int i = 0; i < histSize; i++) {
-                 histSum += histData[i];
-                 histAvg += i*histData[i];
-             }
-             histAvg /= histSize;
-
-             Log.d(TAG, "hist " + histSize + ":" + Arrays.toString(histData));
-             final int basex = outputColor.width() - 256 * 2 - 10;
-             final int basey = outputColor.height();
-             Imgproc.line(outputColor,
-                     new Point(basex-4, basey),
-                     new Point(basex-4, basey - 10.0/256.0 * 500),
-                     new Scalar(255, 255, 0), 2);
-             Imgproc.line(outputColor,
-                     new Point(basex+257*2, basey),
-                     new Point(basex+257*2, basey - 10.0/256.0 * 500),
-                     new Scalar(255, 255, 0), 2);
-             for (int i = 0; i < histSize; i++) {
-                 Imgproc.line(outputColor,
-                         new Point(basex + i * 2, basey),
-                         new Point(basex + i * 2, basey - Math.log(histData[i] / histSum * 500)*20),
-                         new Scalar(255, 0, 0), 2);
-             }
-
-             /* Reduce exposure until we have no pixels > 200 */
-             float histSumSaturated = 0.0f;
-             float histSumMid = 0.0f;
-             for (int i = 100; i < 200; i++)
-                 histSumMid += histData[i];
-             for (int i = 200; i < histSize; i++)
-                 histSumSaturated += histData[i];
-             if (histSumMid < histSum/3)
-                 exposure = Math.min(exposure + 0.03, 1.0);
-             if (histSumSaturated >= 1)
-                 exposure = Math.max(exposure - 0.05, -1.0);
-             Imgproc.putText(outputColor, "" + exposure, new Point(outputColor.width()-300, outputColor.height()-50),
-                     Imgproc.FONT_HERSHEY_SIMPLEX, 2, new Scalar(255, 0, 0), 2);
-             inputGray.release();
-
-             /* Compute otsu threshold */
-             double mu = 0, scale = 1.0/histSum;
-             for(int i = 0; i < histData.length; i++ )
-             {
-                 mu += i*(double)histData[i];
-             }
-
-             mu *= scale;
-             double mu1 = 0, q1 = 0;
-             double max_sigma = 0, max_val = 0;
-
-             for(int i = 0; i < histData.length; i++ )
-             {
-                 double p_i, q2, mu2, sigma;
-
-                 p_i = histData[i]*scale;
-                 mu1 *= q1;
-                 q1 += p_i;
-                 q2 = 1. - q1;
-
-                 final double FLT_EPSILON = 1.19209290e-7;
-                 if( Math.min(q1,q2) < FLT_EPSILON || Math.max(q1,q2) > 1.0-FLT_EPSILON)
-                    continue;
-
-                 mu1 = (mu1 + i*p_i)/q1;
-                 mu2 = (mu - q1*mu1)/q2;
-                 sigma = q1*q2*(mu1 - mu2)*(mu1 - mu2);
-                 if( sigma > max_sigma )
-                 {
-                     max_sigma = sigma;
-                     max_val = i;
-                 }
-             }
-             otsu = max_val;
-             Imgproc.line(outputColor,
-                     new Point(basex + otsu * 2, basey),
-                     new Point(basex + otsu * 2, basey - 100),
-                     new Scalar(255, 128, 0), 2);
-         }
-
-         // Mask input with average value
-         // TODO: would be better to compute otsu on masked region
-         //inputColor.setTo(new Scalar(histAvg,histAvg,histAvg), invcontourmask);
-         //outputColor.setTo(new Scalar(255,200,200), invcontourmask);
-
-         contourmask.release();
-         invcontourmask.release();
-
-         /* End of compute histogram */
-
-         Imgproc.rectangle(outputColor, rect, new Scalar(255,0,0), 5);
-         Mat img_crop = new Mat(inputColor, rect);
-
-         Mat M = Imgproc.getRotationMatrix2D(new Point(rect.width/2, rect.height/2), -angle, 1.0);
-         Mat img_rot = new Mat();
-         Imgproc.warpAffine(img_crop, img_rot, M, rect.size());
-         img_crop.release();
-
-        /* TODO: second round of cropping
-            # rotate contour
-            pts = numpy.int32(cv2.transform(numpy.array(c), M))
-            #cv2.drawContours(img_rot,[pts],0,(0,255,255),2)
-            rect = cv2.boundingRect(pts)
-
-            # crop
-            #
-            (x, y, w, h) = rect
-            img_crop = img_rot[y:(y+h), x:(x+w)]
-         */
-
-        Mat img_processed = findDigits(img_rot, otsu);
-
-        Mat output = new Mat();
-        // TODO: Silly to resize back
-        Imgproc.resize(outputColor, output, inputSize, 0, 0, Imgproc.INTER_AREA);
-        outputColor.release();
-        double overlayRatio = 0.5;
-        Size overlaySize = new Size( inputSize.width*overlayRatio, inputSize.height*overlayRatio );
-        Rect roi = new Rect( new Point( 0, 0 ), overlaySize);
-        Mat destinationROI = new Mat(output, roi );
-        Imgproc.resize(img_processed, destinationROI, overlaySize, 0, 0, Imgproc.INTER_AREA);
-        //img_rot.copyTo(destinationROI);
-
-         /* Have we found a good readout yet? */
-         HashMap<String, Integer> pcount = new HashMap<String, Integer>();
-         for (String p: parsedText) {
-             if (p.length() == 0)
-                 continue;
-             int cnt = pcount.getOrDefault(p, 0)+1;
-             if (cnt > 10) {
-                 Imgproc.putText(output, "<" + p + ">", new Point(0, output.size().height-50),
-                         Imgproc.FONT_HERSHEY_SIMPLEX, 10, new Scalar(255, 0, 0), 30);
-                 this.runOnUiThread(() -> {
-                     (Toast.makeText(this, "Read out <" + p + ">!", Toast.LENGTH_LONG)).show();
-                     startStop(false);
-                 });
-                 break;
-             }
-             pcount.put(p, cnt);
-         }
-
-        //Imgproc.resize(img_rot, output, inputSize, 0, 0, Imgproc.INTER_AREA);
-         img_processed.release();
         return output;
     }
 }

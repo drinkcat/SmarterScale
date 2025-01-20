@@ -3,6 +3,7 @@ package com.drinkcat.smarterscale;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
@@ -67,10 +68,24 @@ public class SmarterCameraView extends JavaCameraView implements Camera.PictureC
             value = (int)Math.round(params.getMaxExposureCompensation() * exposure);
         params.setExposureCompensation(value);
 
-        // HACK: That doesn't do much?!
+        // TODO: That doesn't seem to do much?!
         List<Camera.Area> meteringAreas = new LinkedList<>();
         meteringAreas.add(new Camera.Area(new Rect(-100, -100, 100, 100), 100));
         params.setMeteringAreas(meteringAreas);
+
+        List<int[]> fps = params.getSupportedPreviewFpsRange();
+        int[] fp = new int[] { Integer.MAX_VALUE, Integer.MAX_VALUE };
+
+        /* Slowest range, but still more than 10 fps */
+        for (int[] fpi: fps) {
+            Log.d(TAG, "fps " + Arrays.toString(fpi));
+            if (fpi[1] >= 10000 && fpi[1] < fp[1]) {
+                fp[0] = fpi[0];
+                fp[1] = fpi[1];
+            }
+        }
+        Log.d(TAG, "fps range set to " + Arrays.toString(fp));
+        params.setPreviewFpsRange(fp[0], fp[1]);
 
         mCamera.setParameters(params);
     }
