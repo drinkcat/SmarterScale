@@ -157,22 +157,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         return (o.width >= 0 && o.height >= 0);
     }
 
-    private boolean overlapSegment(Rect a, Rect b) {
-        Rect o = overlapRaw(a, b);
-
-        // For vertical segments, accept slightly non-overlapping segments
-        // to catch digits like 0 and 1 that don't have a vertical segment
-        // in the center
-        final double VERT_EXPAND_RATIO = 1.0;
-        double th = 0.0;
-        if (a.width < a.height && b.width < b.height)
-            th = - VERT_EXPAND_RATIO * o.width;
-
-        //Log.d(TAG, "overlap " + a + "/" + b + "=" + o);
-
-        return (o.width >= 0 && o.height >= th);
-    }
-
     private Rect union(Rect a, Rect b) {
         if (a == null) return b;
         if (b == null) return a;
@@ -180,7 +164,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         int x = Math.min(a.x, b.x);
         int y = Math.min(a.y, b.y);
         int width = Math.max(a.x+a.width, b.x+b.width) - x;
-        int height = Math.max(a.y+a.height, b.y-b.height) - y;
+        int height = Math.max(a.y+a.height, b.y+b.height) - y;
 
         return new Rect(x, y, width, height);
     }
@@ -200,11 +184,28 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     final double MIN_ASSUMED_HEIGHT = 0.20;
     final double MAX_ASSUMED_HEIGHT = 0.35;
 
+    /* Vertical segments tend to be about half the size. */
+    /* TODO: Configurable. */
+    final double SEGMENT_VERT_HORIZ_RATIO = 0.5;
+    final double MIN_VERT_SEGMENT_RATIO = 1.67;
+    final double MAX_VERT_SEGMENT_RATIO = 2.67;
+    final double MIN_HORIZ_SEGMENT_RATIO = 3.0;
+    final double MAX_HORIZ_SEGMENT_RATIO = 4.5;
+    /* /TODO: Configurable */
+
+    /* 0.9: Segments can be shorter than half the height */
+    final double MIN_VERT_SEGMENT_HEIGHT = MIN_ASSUMED_HEIGHT * 0.5 * 0.9;
+    final double MAX_VERT_SEGMENT_HEIGHT = MAX_ASSUMED_HEIGHT * 0.5;
+
+    final double MIN_HORIZ_SEGMENT_HEIGHT = MIN_VERT_SEGMENT_HEIGHT * SEGMENT_VERT_HORIZ_RATIO;
+    final double MAX_HORIZ_SEGMENT_HEIGHT = MAX_ASSUMED_HEIGHT * SEGMENT_VERT_HORIZ_RATIO / 0.8;
+
+    final double MIN_FILL_RATIO = 0.7;
+
     LinkedList<String> parsedText = new LinkedList<>();
     private void findDigits(Mat output, Mat int_thresh, List<MatOfPoint> cnts) {
         LinkedList<TaggedRect> rectIgnore = new LinkedList<TaggedRect>();
         LinkedList<TaggedRect> rectGood = new LinkedList<TaggedRect>(); // Vertical and horizontal segments
-        LinkedList<TaggedRect> rectDot = new LinkedList<TaggedRect>(); // Dots
 
         for (MatOfPoint c: cnts) {
             Rect rect = Imgproc.boundingRect(c);
@@ -219,9 +220,10 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             double w = rect.width;
             double ratio = (w > h) ? w / h : h / w;
 
-            if ((ratio > 1.1 && ratio < 1.8) || ratio > 5.0) {
+            if ((w > h && (ratio < MIN_VERT_SEGMENT_RATIO || ratio > MAX_VERT_SEGMENT_RATIO)) ||
+                    (w <= h && (ratio < MIN_HORIZ_SEGMENT_RATIO || ratio > MAX_HORIZ_SEGMENT_RATIO))) {
                 rectIgnore.add(new TaggedRect(rect));
-                Log.d(TAG, "ignore by ratio: " + rect + " / " + ratio);
+                //Log.d(TAG, "ignore by ratio: " + rect + " / " + ratio);
                 continue;
             }
 
@@ -229,29 +231,32 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             double rect_area = rect.area();
             double fillratio = area / rect_area / 255;
 
-            if (fillratio < 0.80) { // # Unlikely a segment/dot
+            if (fillratio < MIN_FILL_RATIO) { // # Unlikely a segment/dot
                 rectIgnore.add(new TaggedRect(rect));
-                Log.d(TAG, "ignore by fill ratio: " + rect + " // " + fillratio);
+                //Log.d(TAG, "ignore by fill ratio: " + rect + " // " + fillratio);
                 continue;
             }
 
-            if (ratio < 1.1) {
-                rectDot.add(new TaggedRect(rect));
+            /* Now expand a bit the rectangle to facilitate matching */
+            final double EXPAND_RATIO = 1.0;
+            if (w > h) {
+                rect.x -= rect.height * EXPAND_RATIO/2;
+                rect.width += rect.height * EXPAND_RATIO;
             } else {
-                rectGood.add(new TaggedRect(rect));
+                rect.y -= rect.width * EXPAND_RATIO/2;
+                rect.height += rect.width * EXPAND_RATIO;
             }
+
+            rectGood.add(new TaggedRect(rect));
 
             Log.d(TAG, "good: " + rect + " / " + ratio + " // " + fillratio);
         }
 
         for (Rect rect: rectIgnore)
-            Imgproc.rectangle(output, rect, new Scalar(127,0,0), 3);
+            Imgproc.rectangle(output, rect, new Scalar(127,0,0), 1);
 
         for (Rect rect: rectGood)
             Imgproc.rectangle(output, rect, new Scalar(0,0,255), 3);
-
-        for (Rect rect: rectDot)
-            Imgproc.rectangle(output, rect, new Scalar(0,255,255), 3);
 
         LinkedList<List<Rect>> groups = new LinkedList<List<Rect>>();
 
@@ -267,12 +272,12 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                 for (TaggedRect r2: rectGood) {
                     if (r2.visited) continue;
                     for (Rect r3: group) {
-                        if (!overlapSegment(r2, r3)) continue;
+                        if (!overlapCheck(r2, r3)) continue;
                         r2.visited = true;
                         added = true;
                         break;
                     }
-                    if (r2.visited) // Add outside the loop to avoid concurent modification
+                    if (r2.visited) // Add outside the loop to avoid concurrent modification
                         group.add(r2);
                 }
             } while (added);
@@ -291,10 +296,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         DIGITMAP.put(sigArrayToSig(new int[]{1, 0, 0, 0, 1, 0, 1}), "7");
         DIGITMAP.put(sigArrayToSig(new int[]{1, 1, 1, 1, 1, 1, 1}), "8");
         DIGITMAP.put(sigArrayToSig(new int[]{1, 1, 1, 1, 1, 0, 1}), "9");
-
-        HashMap<Integer,String> DOTMAP = new HashMap<Integer, String>();
-        DIGITMAP.put(sigArrayToSig(new int[]{0, 0, 0, 1}), ".");
-        DIGITMAP.put(sigArrayToSig(new int[]{0, 1, 1, 0}), ":");
 
         HashMap<Integer,String> digits = new HashMap<Integer, String>();
         for (List<Rect> group: groups) {
@@ -323,40 +324,6 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             if (digit == null)
                 continue;
 
-            // Also look for nearby dots on the left and right
-            int[][] dotsigarray = new int[2][4];
-            for (TaggedRect r2: rectDot) {
-                if (r2.visited) continue;
-                // Half the diameter tolerance
-                double tolerance = (r2.width+r2.height)/2.0/2.0;
-                Rect o = overlapRaw(r2, u);
-                if (o.width < -tolerance || o.height < -tolerance)
-                    continue;
-
-                r2.visited = true;
-                int sx, sy;
-                if (r2.x < u.x) // left
-                    sx = 0;
-                else if (r2.x+r2.width > u.x+u.width) // right
-                    sx = 1;
-                else
-                    continue; //center?!
-
-                sy = (int)Math.round(3.0*(r2.y-u.y)/u.height);
-                if (sy < 0 || sy >= dotsigarray[sx].length)
-                    continue;
-                dotsigarray[sx][sy] = 1;
-            }
-
-            String leftdot = DIGITMAP.get(sigArrayToSig(dotsigarray[0]));
-            String rightdot = DIGITMAP.get(sigArrayToSig(dotsigarray[1]));
-            Log.d(TAG, "found dot: " + leftdot + "/" + rightdot +
-                    " from " + Arrays.toString(dotsigarray[0]) + "/"  + Arrays.toString(dotsigarray[1]));
-
-            if (leftdot != null)
-                digit = leftdot + digit;
-            if (rightdot != null)
-                digit = digit + rightdot;
             digits.put(u.x, digit);
         }
 
@@ -440,7 +407,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                 (int)(inputSize.width*0.5), (int)(inputSize.height*MAX_ASSUMED_HEIGHT));
         Imgproc.rectangle(output, rect, new Scalar(255,0,0), (int)(0.005*inputSize.width));
 
-        Imgproc.drawContours(output, cnts, -1, new Scalar(0,128,0), 3);
+        Imgproc.drawContours(output, cnts, -1, new Scalar(0,128,0), 2);
 
         findDigits(output, int_thresh, cnts);
 
