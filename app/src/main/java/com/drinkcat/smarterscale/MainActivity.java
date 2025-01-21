@@ -6,6 +6,8 @@ import android.view.MotionEvent;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import org.opencv.android.CameraActivity;
@@ -23,10 +25,14 @@ import org.opencv.imgproc.Imgproc;
 import java.util.Collections;
 import java.util.List;
 
-public class MainActivity extends CameraActivity implements CvCameraViewListener2, View.OnTouchListener {
+public class MainActivity extends CameraActivity implements CvCameraViewListener2, View.OnTouchListener, View.OnClickListener {
     private static final String TAG = "MainActivity";
 
     private SmarterCameraView mOpenCvCameraView;
+    private TextView mWeight;
+    private Button mStartStop;
+    private Button mSend;
+
 
     private Digitizer digitizer;
 
@@ -50,10 +56,13 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         setContentView(R.layout.activity_main);
 
         mOpenCvCameraView = (SmarterCameraView) findViewById(R.id.main_activity_smarter_camera_view);
-
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
-
         mOpenCvCameraView.setCvCameraViewListener(this);
+
+        mStartStop = (Button) findViewById(R.id.main_activity_start_stop);
+        mSend = (Button) findViewById(R.id.main_activity_send);
+        mSend.setEnabled(false);
+        mWeight = (TextView) findViewById(R.id.main_activity_weight);
     }
 
     @Override
@@ -71,6 +80,9 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         if (mOpenCvCameraView != null) {
             startStop(true);
             mOpenCvCameraView.setOnTouchListener(this);
+        }
+        if (mStartStop != null) {
+            mStartStop.setOnClickListener(this);
         }
     }
     @Override
@@ -97,9 +109,12 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     public void startStop(boolean start) {
         if (start) {
             init = false;
+            mStartStop.setText("Stop");
+            mWeight.setText("??.?");
             digitizer.reset();
             mOpenCvCameraView.enableView();
         } else {
+            mStartStop.setText("Start");
             mOpenCvCameraView.disableView();
         }
         started = start;
@@ -109,6 +124,14 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     public boolean onTouch(View v, MotionEvent event) {
         startStop(!started);
         return true;
+    }
+
+    @Override
+    public void onClick(View v) {
+        if (v == mStartStop)
+            startStop(!started);
+        else if (v == mSend)
+            ; // TODO: Send data!
     }
 
     boolean init = false;
@@ -141,54 +164,10 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             Imgproc.putText(outputFull, ">" + p, new Point(0, outputFull.size().height-50),
                     Imgproc.FONT_HERSHEY_SIMPLEX, 10, new Scalar(255, 0, 0), 30);
             this.runOnUiThread(() -> {
-                (Toast.makeText(this, "Read out <" + p + ">!", Toast.LENGTH_LONG)).show();
+                mWeight.setText(p);
                 startStop(false);
             });
         }
         return outputFull;
-    }
-}
-
-class TaggedRect extends Rect {
-    public boolean visited = false;
-
-    TaggedRect(Rect r) { this(r, false); }
-    TaggedRect(Rect r, boolean visited) {
-        super(r.x, r.y, r.width, r.height); this.visited = visited;
-    }
-}
-
-class RectUtils {
-    public static double sumRect(Mat int_thresh, Rect rect) {
-        return int_thresh.get(rect.y+rect.height, rect.x+rect.width)[0]
-                - int_thresh.get(rect.y+rect.height, rect.x)[0]
-                - int_thresh.get(rect.y, rect.x+rect.width)[0]
-                + int_thresh.get(rect.y, rect.x)[0];
-    }
-
-    public static  Rect overlapRaw(Rect a, Rect b) {
-        int x = Math.max(a.x, b.x);
-        int y = Math.max(a.y, b.y);
-        int width = Math.min(a.x+a.width, b.x+b.width) - x;
-        int height = Math.min(a.y+a.height, b.y+b.height) - y;
-
-        return new Rect(x, y, width, height);
-    }
-
-    public static boolean overlapCheck(Rect a, Rect b) {
-        Rect o = overlapRaw(a, b);
-        return (o.width >= 0 && o.height >= 0);
-    }
-
-    public static Rect union(Rect a, Rect b) {
-        if (a == null) return b;
-        if (b == null) return a;
-
-        int x = Math.min(a.x, b.x);
-        int y = Math.min(a.y, b.y);
-        int width = Math.max(a.x+a.width, b.x+b.width) - x;
-        int height = Math.max(a.y+a.height, b.y+b.height) - y;
-
-        return new Rect(x, y, width, height);
     }
 }

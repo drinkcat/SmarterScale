@@ -307,3 +307,48 @@ public class Digitizer {
 
     /*** End of constants. ***/
 }
+
+
+class TaggedRect extends Rect {
+    public boolean visited = false;
+
+    TaggedRect(Rect r) { this(r, false); }
+    TaggedRect(Rect r, boolean visited) {
+        super(r.x, r.y, r.width, r.height); this.visited = visited;
+    }
+}
+
+class RectUtils {
+    public static double sumRect(Mat int_thresh, Rect rect) {
+        return int_thresh.get(rect.y+rect.height, rect.x+rect.width)[0]
+                - int_thresh.get(rect.y+rect.height, rect.x)[0]
+                - int_thresh.get(rect.y, rect.x+rect.width)[0]
+                + int_thresh.get(rect.y, rect.x)[0];
+    }
+
+    public static  Rect overlapRaw(Rect a, Rect b) {
+        int x = Math.max(a.x, b.x);
+        int y = Math.max(a.y, b.y);
+        int width = Math.min(a.x+a.width, b.x+b.width) - x;
+        int height = Math.min(a.y+a.height, b.y+b.height) - y;
+
+        return new Rect(x, y, width, height);
+    }
+
+    public static boolean overlapCheck(Rect a, Rect b) {
+        Rect o = overlapRaw(a, b);
+        return (o.width >= 0 && o.height >= 0);
+    }
+
+    public static Rect union(Rect a, Rect b) {
+        if (a == null) return b;
+        if (b == null) return a;
+
+        int x = Math.min(a.x, b.x);
+        int y = Math.min(a.y, b.y);
+        int width = Math.max(a.x+a.width, b.x+b.width) - x;
+        int height = Math.max(a.y+a.height, b.y+b.height) - y;
+
+        return new Rect(x, y, width, height);
+    }
+}
