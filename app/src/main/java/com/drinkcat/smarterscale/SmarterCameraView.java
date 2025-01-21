@@ -1,35 +1,20 @@
 package com.drinkcat.smarterscale;
 
-import java.io.FileOutputStream;
-import java.io.OutputStream;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Objects;
 
 import org.opencv.android.JavaCameraView;
 
-import android.content.ContentResolver;
-import android.content.ContentValues;
 import android.content.Context;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Rect;
 import android.hardware.Camera;
-import android.hardware.Camera.PictureCallback;
-import android.hardware.Camera.Size;
-import android.net.Uri;
-import android.os.Build;
-import android.os.Environment;
-import android.provider.MediaStore;
 import android.util.AttributeSet;
 import android.util.Log;
 
 public class SmarterCameraView extends JavaCameraView implements Camera.PictureCallback {
 
     private static final String TAG = "SmarterCameraView";
-    private String mPictureFileName;
 
     public SmarterCameraView(Context context, AttributeSet attrs) {
         super(context, attrs);
