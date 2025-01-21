@@ -140,6 +140,8 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
     @Override
     public boolean onScale(@NonNull ScaleGestureDetector detector) {
+        if (!Double.isFinite(beginZoom))
+            return true;
         float span = detector.getCurrentSpan();
         double newZoom = beginZoom + (span - beginSpan) / beginSpan;
         Log.d(TAG, "onScale zoom " + beginSpan + "/" + span + " => " + newZoom + "(" + beginZoom);

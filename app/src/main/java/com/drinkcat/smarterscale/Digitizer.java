@@ -94,8 +94,6 @@ public class Digitizer {
     /* inputSize is the original size before cropping. */
     private Mat threshold(Mat inputGray, Size inputSize) {
         Mat thresh = new Mat();
-        final double MEDIAN_BLUR_SIZE = 0.002; /* Meant to be 5px for 1000px input */
-        final double ADAPTIVE_THRESHOLD_SIZE = 0.03; /* Meant to be ~50px for 1000px input */
         int medianBlurSize = (int)(MEDIAN_BLUR_SIZE * inputSize.width);
         if ((medianBlurSize % 2) == 0)
             medianBlurSize += 1;
@@ -280,6 +278,11 @@ public class Digitizer {
     }
 
     /*** Constants, some of those should be configurable. ***/
+    /* TODO: Configurable? */
+    final double MEDIAN_BLUR_SIZE = 0.002; /* Meant to be 2px for 1000px input */
+    final double ADAPTIVE_THRESHOLD_SIZE = 0.030; /* Meant to be ~30px for 1000px input */
+    /* /TODO */
+
     /* We want to find digits that take 20-35% of the image height. */
     private final double MIN_ASSUMED_HEIGHT = 0.20;
     private final double MAX_ASSUMED_HEIGHT = 0.35;

@@ -39,6 +39,8 @@ public class SmarterCameraView extends JavaCameraView implements Camera.PictureC
     }
 
     public void setZoom(double zoom) {
+        if (mCamera == null || !Double.isFinite(zoom))
+            return;
         Camera.Parameters params = mCamera.getParameters();
         zoom = Math.min(zoom, 1.0);
         zoom = Math.max(zoom, 0.0);
@@ -47,11 +49,15 @@ public class SmarterCameraView extends JavaCameraView implements Camera.PictureC
     }
 
     public double getZoom() {
+        if (mCamera == null)
+            return Double.NaN;
         Camera.Parameters params = mCamera.getParameters();
         return (double)params.getZoom()/params.getMaxZoom();
     }
 
     public void setExposure(double exposure) {
+        if (mCamera == null)
+            return;
         Camera.Parameters params = mCamera.getParameters();
         int value;
         if (exposure < 0)
@@ -70,6 +76,8 @@ public class SmarterCameraView extends JavaCameraView implements Camera.PictureC
 
     /* Set fps to the minimum provided. */
     public void setSlowFps() {
+        if (mCamera == null)
+            return;
         Camera.Parameters params = mCamera.getParameters();
         /* Set slowest fps range, but still more than 10 fps */
         int[] fp = new int[] { Integer.MAX_VALUE, Integer.MAX_VALUE };
@@ -88,16 +96,22 @@ public class SmarterCameraView extends JavaCameraView implements Camera.PictureC
     }
 
     public void setExposureLock(boolean lock) {
+        if (mCamera == null)
+            return;
         Camera.Parameters params = mCamera.getParameters();
         params.setAutoExposureLock(lock);
         mCamera.setParameters(params);
     }
 
     public List<Camera.Size> getResolutionList() {
+        if (mCamera == null)
+            return null;
         return mCamera.getParameters().getSupportedPreviewSizes();
     }
 
     public void setResolution(Camera.Size resolution) {
+        if (mCamera == null)
+            return;
         disconnectCamera();
         mMaxHeight = resolution.height;
         mMaxWidth = resolution.width;
@@ -105,6 +119,8 @@ public class SmarterCameraView extends JavaCameraView implements Camera.PictureC
     }
 
     public Camera.Size getResolution() {
+        if (mCamera == null)
+            return null;
         return mCamera.getParameters().getPreviewSize();
     }
 
