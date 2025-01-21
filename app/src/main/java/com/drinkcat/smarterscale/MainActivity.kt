@@ -29,10 +29,8 @@ import org.opencv.core.Point
 import org.opencv.core.Scalar
 import org.opencv.imgproc.Imgproc
 
-class MainActivity : ComponentActivity(), CvCameraViewListener2, View.OnClickListener,
-    OnScaleGestureListener {
+class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     private lateinit var mOpenCvCameraView: SmarterCameraView
-    private lateinit var mCameraViewScaleGestureDetector: ScaleGestureDetector
     private lateinit var mWeight: TextView
     private lateinit var mStartStop: Button
     private lateinit var mSend: Button
@@ -64,20 +62,56 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2, View.OnClickLis
             insets
         }
 
+        lifecycle.coroutineScope.launch {
+            mSmarterHealthConnect.checkPermissions()
+        }
+
         mOpenCvCameraView =
             findViewById<View>(R.id.main_activity_smarter_camera_view) as SmarterCameraView
         mOpenCvCameraView.visibility = SurfaceView.VISIBLE
         mOpenCvCameraView.setCvCameraViewListener(this)
-
-        mCameraViewScaleGestureDetector = ScaleGestureDetector(this, this)
 
         mStartStop = findViewById<View>(R.id.main_activity_start_stop) as Button
         mSend = findViewById<View>(R.id.main_activity_send) as Button
         mSend.isEnabled = false
         mWeight = findViewById<View>(R.id.main_activity_weight) as TextView
 
-        lifecycle.coroutineScope.launch {
-            mSmarterHealthConnect.checkPermissions()
+        val scalegesturedetector = ScaleGestureDetector(this,
+            object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                private var beginSpan = 0f
+                private var beginZoom = 1.0
+
+                override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
+                    beginSpan = detector.currentSpan
+                    beginZoom = mOpenCvCameraView.zoom
+                    return true
+                }
+
+                override fun onScale(detector: ScaleGestureDetector): Boolean {
+                    if (!java.lang.Double.isFinite(beginZoom)) return true
+                    val span = detector.currentSpan
+                    val newZoom = beginZoom + (span - beginSpan) / beginSpan
+                    Log.d(
+                        TAG,
+                        "onScale zoom $beginSpan/$span => $newZoom($beginZoom"
+                    )
+                    /* TODO: Manually crop input more if newZoom > 1.0. */
+                    mOpenCvCameraView.zoom = newZoom
+                    return true
+                }
+            })
+        mOpenCvCameraView.setOnTouchListener { _, event ->
+            scalegesturedetector.onTouchEvent(event)
+        }
+
+        mStartStop.setOnClickListener {
+            startStop(!started)
+        }
+        mSend.setOnClickListener {
+            mSend.isEnabled = false;
+            lifecycle.coroutineScope.launch {
+                mSmarterHealthConnect.writeWeightInput(readWeight)
+            }
         }
     }
 
@@ -118,14 +152,6 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2, View.OnClickLis
     public override fun onResume() {
         super.onResume()
         startStop(true)
-        mOpenCvCameraView.setOnTouchListener { _: View?, event: MotionEvent? ->
-            mCameraViewScaleGestureDetector.onTouchEvent(
-                event!!
-            )
-        }
-
-        mStartStop.setOnClickListener(this)
-        mSend.setOnClickListener(this)
     }
 
     public override fun onDestroy() {
@@ -153,41 +179,6 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2, View.OnClickLis
             mOpenCvCameraView.disableView()
         }
         started = start
-    }
-
-    private var beginSpan = 0f
-    private var beginZoom = 1.0
-
-    override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
-        beginSpan = detector.currentSpan
-        beginZoom = mOpenCvCameraView.zoom
-        return true
-    }
-
-    override fun onScale(detector: ScaleGestureDetector): Boolean {
-        if (!java.lang.Double.isFinite(beginZoom)) return true
-        val span = detector.currentSpan
-        val newZoom = beginZoom + (span - beginSpan) / beginSpan
-        Log.d(
-            TAG,
-            "onScale zoom $beginSpan/$span => $newZoom($beginZoom"
-        )
-        /* TODO: Manually crop input more if newZoom > 1.0. */
-        mOpenCvCameraView.zoom = newZoom
-        return true
-    }
-
-    override fun onScaleEnd(detector: ScaleGestureDetector) {}
-
-    override fun onClick(v: View) {
-        if (v === mStartStop) {
-            startStop(!started)
-        } else if (v === mSend) {
-            mSend.isEnabled = false;
-            lifecycle.coroutineScope.launch {
-                mSmarterHealthConnect.writeWeightInput(readWeight)
-            }
-        }
     }
 
     var init: Boolean = false
