@@ -39,4 +39,5 @@ dependencies {
     androidTestImplementation libs.espresso.core
 
     implementation 'org.opencv:opencv:4.10.0'
+    implementation "androidx.health.connect:connect-client:1.1.0-alpha11"
 }

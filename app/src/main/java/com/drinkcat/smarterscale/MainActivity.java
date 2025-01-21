@@ -10,7 +10,10 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.contract.ActivityResultContract;
 import androidx.annotation.NonNull;
+import androidx.health.connect.client.HealthConnectClient;
+import androidx.health.connect.client.PermissionController;
 
 import org.opencv.android.CameraActivity;
 import org.opencv.android.CameraBridgeViewBase;
@@ -26,6 +29,7 @@ import org.opencv.imgproc.Imgproc;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 public class MainActivity extends CameraActivity implements CvCameraViewListener2, View.OnClickListener, ScaleGestureDetector.OnScaleGestureListener {
     private static final String TAG = "MainActivity";
@@ -38,6 +42,8 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
 
     private Digitizer digitizer;
+
+    private HealthConnectClient mHealthConnectClient;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -68,6 +74,8 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         mSend = (Button) findViewById(R.id.main_activity_send);
         mSend.setEnabled(false);
         mWeight = (TextView) findViewById(R.id.main_activity_weight);
+
+        checkHealthConnectPermissions();
     }
 
     @Override
@@ -200,5 +208,30 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             });
         }
         return outputFull;
+    }
+
+    private void checkHealthConnectPermissions() {
+        int availabilityStatus = HealthConnectClient.getSdkStatus(this, null);
+        if (availabilityStatus == HealthConnectClient.SDK_UNAVAILABLE) {
+            Log.e(TAG, "Health connect not available!");
+            Toast.makeText(this, "Health connect not available!", Toast.LENGTH_LONG).show();
+            return;
+        }
+        mHealthConnectClient = HealthConnectClient.getOrCreate(this);
+
+        /*
+        val PERMISSIONS =
+                setOf(
+                        HealthPermission.getReadPermission(HeartRateRecord::class),
+        HealthPermission.getWritePermission(HeartRateRecord::class),
+        HealthPermission.getReadPermission(StepsRecord::class),
+        HealthPermission.getWritePermission(StepsRecord::class)
+)*/
+
+        ActivityResultContract<Set<String>, Set<String>> requestPermissionActivityContract =
+                PermissionController.createRequestPermissionResultContract();
+
+        Set<String> permissions;
+        mHealthConnectClient.getPermissionController().getGrantedPermissions();
     }
 }
