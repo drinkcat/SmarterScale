@@ -14,13 +14,46 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical" >
+            android:orientation="vertical"
+            android:paddingLeft="15dp"
+            android:paddingTop="15dp"
+            android:paddingRight="15dp">
 
             <TextView
-                android:id="@+id/privacyPolicyTextView"
+                android:id="@+id/privacyPolicyTextHeader"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Insert privacy policy here" />
+                android:paddingVertical="5dp"
+                android:text="Privacy policy"
+                android:textSize="28sp" />
+
+            <TextView
+                android:id="@+id/privacyPolicyTextView1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingVertical="5dp"
+                android:text="@string/privacy_policy_1" />
+
+            <TextView
+                android:id="@+id/privacyPolicyTextView2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingVertical="5dp"
+                android:text="@string/privacy_policy_2" />
+
+            <TextView
+                android:id="@+id/privacyPolicyTextView3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingVertical="5dp"
+                android:text="@string/privacy_policy_3" />
+
+            <TextView
+                android:id="@+id/privacyPolicyTextView4"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingVertical="5dp"
+                android:text="@string/privacy_policy_4" />
         </LinearLayout>
     </ScrollView>
 

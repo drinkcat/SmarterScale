@@ -50,7 +50,7 @@ public class Digitizer {
     }
 
     /* Parse frame. input is grayscale, output is color and will be painted on for debugging. */
-    public void parseFrame(Mat input, Mat output) {
+    public void parseFrame(Mat input, Mat output, boolean debug) {
         Size inputSize = input.size();
 
         /* We only process the center 2/3 of the image. */
@@ -70,16 +70,17 @@ public class Digitizer {
         Mat hierarchy = new Mat();
         Imgproc.findContours(thresh, cnts, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
         /* Draw contours for debugging. */
-        Imgproc.drawContours(outputCrop, cnts, -1, new Scalar(0,128,0), 2);
+        if (debug)
+            Imgproc.drawContours(outputCrop, cnts, -1, new Scalar(0,128,0), 2);
 
         /* Integral of threshold, used for fill ratio later. */
         Mat int_thresh = new Mat();
         Imgproc.integral(thresh, int_thresh);
         thresh.release();
 
-        LinkedList<TaggedRect> segments = findSegments(outputCrop, int_thresh, cnts);
+        LinkedList<TaggedRect> segments = findSegments(debug ? outputCrop : null, int_thresh, cnts);
         thresh.release();
-        findDigits(outputCrop, segments);
+        findDigits(debug ? outputCrop : null, segments);
 
         /* Draw guiding rectangle for the user. */
         int min_height = (int)(inputSize.height*MIN_ASSUMED_HEIGHT);
@@ -149,7 +150,8 @@ public class Digitizer {
             Rect u = null;
             for (Rect r : group)
                 u = RectUtils.union(u, r);
-            Imgproc.rectangle(output, u, new Scalar(255, 0, 255), 5);
+            if (output != null)
+                Imgproc.rectangle(output, u, new Scalar(255, 0, 255), 5);
             int[] sigarray = new int[7];
             for (Rect r : group) {
                 int sx = (int)Math.round(1.0 * (r.x - u.x) / u.width);
@@ -183,8 +185,9 @@ public class Digitizer {
         String s = sb.toString();
         Log.d(TAG, "Parsed: " + s);
 
-        Imgproc.putText(output, s, new Point(0, output.size().height),
-                Imgproc.FONT_HERSHEY_SIMPLEX, 5, new Scalar(128, 128, 255), 5);
+        if (output != null)
+            Imgproc.putText(output, s, new Point(0, output.size().height),
+                    Imgproc.FONT_HERSHEY_SIMPLEX, 5, new Scalar(128, 128, 255), 5);
 
         // TODO: Using a circular buffer would be better...
         parsedText.addFirst(s);
@@ -241,11 +244,13 @@ public class Digitizer {
             Log.d(TAG, "good: " + rect + " / " + ratio + " // " + fillratio);
         }
 
-        for (Rect rect: rectIgnore)
-            Imgproc.rectangle(output, rect, new Scalar(127,0,0), 1);
+        if (output != null) {
+            for (Rect rect : rectIgnore)
+                Imgproc.rectangle(output, rect, new Scalar(127, 0, 0), 1);
 
-        for (Rect rect: rectGood)
-            Imgproc.rectangle(output, rect, new Scalar(0,0,255), 3);
+            for (Rect rect : rectGood)
+                Imgproc.rectangle(output, rect, new Scalar(0, 0, 255), 3);
+        }
 
         return rectGood;
     }

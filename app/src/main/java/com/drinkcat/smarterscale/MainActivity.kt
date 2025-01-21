@@ -1,26 +1,26 @@
 package com.drinkcat.smarterscale
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
-import android.view.MotionEvent
+import android.view.MenuInflater
 import android.view.ScaleGestureDetector
-import android.view.ScaleGestureDetector.OnScaleGestureListener
 import android.view.SurfaceView
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.iterator
 import androidx.lifecycle.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import org.opencv.android.CameraBridgeViewBase
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2
 import org.opencv.android.OpenCVLoader
@@ -30,13 +30,38 @@ import org.opencv.core.Scalar
 import org.opencv.imgproc.Imgproc
 
 class MainActivity : ComponentActivity(), CvCameraViewListener2 {
+    /* UI elements */
     private lateinit var mOpenCvCameraView: SmarterCameraView
+    private lateinit var mHelp: TextView
     private lateinit var mWeight: TextView
     private lateinit var mStartStop: Button
-    private lateinit var mSend: Button
+    private lateinit var mSubmit: Button
 
     private var mDigitizer = Digitizer();
     private var mSmarterHealthConnect = SmarterHealthConnect(this)
+
+    private var started = false
+    private var readWeight = Double.NaN
+    private var debug = true
+        set(value) {
+            field = value
+            mStartStop.visibility =
+                if (debug || !started) View.VISIBLE else View.INVISIBLE
+        }
+    private var autoSubmit = false
+        set(value) {
+            field = value
+            mSubmit.visibility =
+                if (autoSubmit) View.INVISIBLE else View.VISIBLE
+        }
+    private var showHelp = true
+        set(value) {
+            field = value
+            mHelp.visibility =
+                if (showHelp && !readWeight.isFinite()) View.VISIBLE else View.INVISIBLE
+            mWeight.visibility =
+                if (showHelp) View.INVISIBLE else View.VISIBLE
+        }
 
     public override fun onCreate(savedInstanceState: Bundle?) {
         Log.i(TAG, "called onCreate")
@@ -71,10 +96,15 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         mOpenCvCameraView.visibility = SurfaceView.VISIBLE
         mOpenCvCameraView.setCvCameraViewListener(this)
 
-        mStartStop = findViewById<View>(R.id.main_activity_start_stop) as Button
-        mSend = findViewById<View>(R.id.main_activity_send) as Button
-        mSend.isEnabled = false
+        mHelp = findViewById<View>(R.id.main_activity_help) as TextView
         mWeight = findViewById<View>(R.id.main_activity_weight) as TextView
+
+        mStartStop = findViewById<View>(R.id.main_activity_start_stop) as Button
+        mSubmit = findViewById<View>(R.id.main_activity_submit) as Button
+        mSubmit.isEnabled = false
+
+        debug = true
+        showHelp = true
 
         val scalegesturedetector = ScaleGestureDetector(this,
             object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -107,11 +137,43 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         mStartStop.setOnClickListener {
             startStop(!started)
         }
-        mSend.setOnClickListener {
-            mSend.isEnabled = false;
-            lifecycle.coroutineScope.launch {
-                mSmarterHealthConnect.writeWeightInput(readWeight)
+        mSubmit.setOnClickListener {
+            submitWeight()
+        }
+
+        val menulistener = PopupMenu.OnMenuItemClickListener { item ->
+            when (item.itemId) {
+                R.id.menu_debug -> { debug = !item.isChecked(); true }
+                R.id.menu_auto -> { autoSubmit = !item.isChecked(); true }
+                R.id.menu_showhelp -> { showHelp = !item.isChecked(); true }
+                R.id.menu_privacy -> {
+                    startActivity(Intent(this, PermissionsRationaleActivity::class.java));
+                    true
+                }
+                else -> { false }
             }
+        }
+
+        findViewById<Button>(R.id.dropdown_menu).setOnClickListener {
+            val popup = PopupMenu(this, it)
+            val inflater: MenuInflater = popup.menuInflater
+            inflater.inflate(R.menu.main_menu, popup.menu)
+            for (item in popup.menu.iterator()) {
+                when (item.itemId) {
+                    R.id.menu_debug -> item.setChecked(debug)
+                    R.id.menu_auto -> item.setChecked(autoSubmit)
+                    R.id.menu_showhelp -> item.setChecked(showHelp)
+                }
+            }
+            popup.setOnMenuItemClickListener(menulistener)
+            popup.show()
+        }
+    }
+
+    private fun submitWeight() {
+        mSubmit.isEnabled = false;
+        lifecycle.coroutineScope.launch {
+            mSmarterHealthConnect.writeWeightInput(readWeight)
         }
     }
 
@@ -163,19 +225,25 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
 
     override fun onCameraViewStopped() {}
 
-    private var started = false
-    private var readWeight = Double.NaN
     private fun startStop(start: Boolean) {
         if (start) {
             init = false
-            mSend.isEnabled = false
+            mSubmit.isEnabled = false
             mStartStop.text = "Stop"
+            mStartStop.visibility =
+                if (debug) View.VISIBLE else View.INVISIBLE
             readWeight = Double.NaN
             mWeight.text = "??.?"
+            mHelp.visibility = if (showHelp) View.VISIBLE else View.INVISIBLE
+            mWeight.visibility = if (showHelp) View.INVISIBLE else View.VISIBLE
             mDigitizer.reset()
             mOpenCvCameraView.enableView()
         } else {
-            mStartStop.text = "Start"
+            if (readWeight.isFinite())
+                mStartStop.text = "Restart"
+            else
+                mStartStop.text = "Start"
+            mStartStop.visibility = View.VISIBLE
             mOpenCvCameraView.disableView()
         }
         started = start
@@ -200,15 +268,16 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         inputColor.copyTo(outputFull)
         inputColor.release()
 
-        mDigitizer.parseFrame(inputFrame.gray(), outputFull)
+        mDigitizer.parseFrame(inputFrame.gray(), outputFull, debug)
 
         /* Have we found a good readout yet? */
         val p = mDigitizer.getParsedText()
         if (p != null) {
-            Imgproc.putText(
-                outputFull, ">$p", Point(0.0, outputFull.size().height - 50),
-                Imgproc.FONT_HERSHEY_SIMPLEX, 10.0, Scalar(255.0, 0.0, 0.0), 30
-            )
+            if (debug)
+                Imgproc.putText(
+                    outputFull, ">$p", Point(0.0, outputFull.size().height - 50),
+                    Imgproc.FONT_HERSHEY_SIMPLEX, 10.0, Scalar(255.0, 0.0, 0.0), 30
+                )
 
             // TODO: Make this configurable
             // Parsed text post-processing, add comma
@@ -217,15 +286,22 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
             try {
                 readWeight = newp.toDouble()
                 this.runOnUiThread {
+                    mHelp.visibility = View.INVISIBLE
                     mWeight.text = readWeight.toString()
-                    mSend.isEnabled = true
+                    mWeight.visibility = View.VISIBLE
+                    if (autoSubmit)
+                        submitWeight()
+                    else
+                        mSubmit.isEnabled = true
                     startStop(false)
                 }
             } catch (e: NumberFormatException) {
                 readWeight = Double.NaN
                 this.runOnUiThread {
+                    mHelp.visibility = View.INVISIBLE
                     mWeight.text = "BAD"
-                    mSend.isEnabled = false
+                    mWeight.visibility = View.VISIBLE
+                    mSubmit.isEnabled = false
                     startStop(false)
                 }
             }
