@@ -49,7 +49,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
         setContentView(R.layout.activity_main);
 
-        mOpenCvCameraView = (SmarterCameraView) findViewById(R.id.tutorial1_activity_java_surface_view);
+        mOpenCvCameraView = (SmarterCameraView) findViewById(R.id.main_activity_smarter_camera_view);
 
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
 
