@@ -1,5 +1,8 @@
 package com.drinkcat.smarterscale;
 
+import android.annotation.TargetApi;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.ScaleGestureDetector;
@@ -10,12 +13,16 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.ComponentActivity;
+import androidx.activity.EdgeToEdge;
 import androidx.activity.result.contract.ActivityResultContract;
 import androidx.annotation.NonNull;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.health.connect.client.HealthConnectClient;
 import androidx.health.connect.client.PermissionController;
 
-import org.opencv.android.CameraActivity;
 import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2;
@@ -31,7 +38,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-public class MainActivity extends CameraActivity implements CvCameraViewListener2, View.OnClickListener, ScaleGestureDetector.OnScaleGestureListener {
+public class MainActivity extends ComponentActivity implements CvCameraViewListener2, View.OnClickListener, ScaleGestureDetector.OnScaleGestureListener {
     private static final String TAG = "MainActivity";
 
     private SmarterCameraView mOpenCvCameraView;
@@ -43,7 +50,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
     private Digitizer digitizer;
 
-    private HealthConnectClient mHealthConnectClient;
+    private SmarterHealthConnect mSmarterHealthConnect;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -62,7 +69,13 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
+        EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
+            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+            return insets;
+        });
 
         mOpenCvCameraView = (SmarterCameraView) findViewById(R.id.main_activity_smarter_camera_view);
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
@@ -75,8 +88,50 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         mSend.setEnabled(false);
         mWeight = (TextView) findViewById(R.id.main_activity_weight);
 
-        checkHealthConnectPermissions();
+        mSmarterHealthConnect = new SmarterHealthConnect(this);
+        mSmarterHealthConnect.checkPermissions(null);
     }
+
+    /** Copied functions from openCV's CameraActivity class, as we want to extend ComponentActivity. **/
+    private static final int CAMERA_PERMISSION_REQUEST_CODE = 200;
+    protected void onCameraPermissionGranted() {
+        List<? extends CameraBridgeViewBase> cameraViews = getCameraViewList();
+        if (cameraViews == null) {
+            return;
+        }
+        for (CameraBridgeViewBase cameraBridgeViewBase: cameraViews) {
+            if (cameraBridgeViewBase != null) {
+                cameraBridgeViewBase.setCameraPermissionGranted();
+            }
+        }
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        boolean havePermission = true;
+        if (checkSelfPermission(android.Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
+            havePermission = false;
+        }
+        if (havePermission) {
+            onCameraPermissionGranted();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        if (requestCode == CAMERA_PERMISSION_REQUEST_CODE && grantResults.length > 0
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            onCameraPermissionGranted();
+        }
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    }
+
+    protected List<? extends CameraBridgeViewBase> getCameraViewList() {
+        return Collections.singletonList(mOpenCvCameraView);
+    }
+    /** End of CameraActivity class copies. **/
 
     @Override
     public void onPause()
@@ -96,13 +151,10 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
                     (v, event) -> mCameraViewScaleGestureDetector.onTouchEvent(event)
             );
         }
-        if (mStartStop != null) {
+        if (mStartStop != null)
             mStartStop.setOnClickListener(this);
-        }
-    }
-    @Override
-    protected List<? extends CameraBridgeViewBase> getCameraViewList() {
-        return Collections.singletonList(mOpenCvCameraView);
+        if (mSend != null)
+            mSend.setOnClickListener(this);
     }
 
     @Override
@@ -120,12 +172,14 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     public void onCameraViewStopped() {
     }
 
-    public boolean started = false;
+    private boolean started = false;
+    private double readWeight = Double.NaN;
     public void startStop(boolean start) {
         if (start) {
             init = false;
             mSend.setEnabled(false);
             mStartStop.setText("Stop");
+            readWeight = Double.NaN;
             mWeight.setText("??.?");
             digitizer.reset();
             mOpenCvCameraView.enableView();
@@ -163,10 +217,11 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
 
     @Override
     public void onClick(View v) {
-        if (v == mStartStop)
+        if (v == mStartStop) {
             startStop(!started);
-        else if (v == mSend)
-            ; // TODO: Send data!
+        } else if (v == mSend) {
+            mSmarterHealthConnect.writeWeightInputBlocking(readWeight);
+        }
     }
 
     boolean init = false;
@@ -201,37 +256,22 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
             // Parsed text post-processing, add comma
             String newp = p.substring(0, p.length()-1) + "." + p.substring(p.length()-1);
 
-            this.runOnUiThread(() -> {
-                mWeight.setText(newp);
-                mSend.setEnabled(true);
-                startStop(false);
-            });
+            try {
+                readWeight = Double.parseDouble(newp);
+                this.runOnUiThread(() -> {
+                    mWeight.setText(Double.toString(readWeight));
+                    mSend.setEnabled(true);
+                    startStop(false);
+                });
+            } catch (NumberFormatException e) {
+                readWeight = Double.NaN;
+                this.runOnUiThread(() -> {
+                    mWeight.setText("BAD");
+                    mSend.setEnabled(false);
+                    startStop(false);
+                });
+            }
         }
         return outputFull;
-    }
-
-    private void checkHealthConnectPermissions() {
-        int availabilityStatus = HealthConnectClient.getSdkStatus(this, null);
-        if (availabilityStatus == HealthConnectClient.SDK_UNAVAILABLE) {
-            Log.e(TAG, "Health connect not available!");
-            Toast.makeText(this, "Health connect not available!", Toast.LENGTH_LONG).show();
-            return;
-        }
-        mHealthConnectClient = HealthConnectClient.getOrCreate(this);
-
-        /*
-        val PERMISSIONS =
-                setOf(
-                        HealthPermission.getReadPermission(HeartRateRecord::class),
-        HealthPermission.getWritePermission(HeartRateRecord::class),
-        HealthPermission.getReadPermission(StepsRecord::class),
-        HealthPermission.getWritePermission(StepsRecord::class)
-)*/
-
-        ActivityResultContract<Set<String>, Set<String>> requestPermissionActivityContract =
-                PermissionController.createRequestPermissionResultContract();
-
-        Set<String> permissions;
-        mHealthConnectClient.getPermissionController().getGrantedPermissions();
     }
 }
