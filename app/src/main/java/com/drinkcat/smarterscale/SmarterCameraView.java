@@ -59,24 +59,31 @@ public class SmarterCameraView extends JavaCameraView implements Camera.PictureC
         mCamera.setParameters(params);
     }
 
+    public List<Integer> getZoomRatios() { return mCamera.getParameters().getZoomRatios(); }
+
     public void setExposure(double exposure) {
         Camera.Parameters params = mCamera.getParameters();
         int value;
-        if (exposure > 0)
+        if (exposure < 0)
             value = (int)Math.round(- params.getMinExposureCompensation() * exposure);
         else
             value = (int)Math.round(params.getMaxExposureCompensation() * exposure);
         params.setExposureCompensation(value);
 
-        // TODO: That doesn't seem to do much?!
+        // TODO: That doesn't seem to change much?!
         List<Camera.Area> meteringAreas = new LinkedList<>();
         meteringAreas.add(new Camera.Area(new Rect(-100, -100, 100, 100), 100));
         params.setMeteringAreas(meteringAreas);
 
-        List<int[]> fps = params.getSupportedPreviewFpsRange();
-        int[] fp = new int[] { Integer.MAX_VALUE, Integer.MAX_VALUE };
+        mCamera.setParameters(params);
+    }
 
-        /* Slowest range, but still more than 10 fps */
+    /* Set fps to the minimum provided. */
+    public void setSlowFps() {
+        Camera.Parameters params = mCamera.getParameters();
+        /* Set slowest fps range, but still more than 10 fps */
+        int[] fp = new int[] { Integer.MAX_VALUE, Integer.MAX_VALUE };
+        List<int[]> fps = params.getSupportedPreviewFpsRange();
         for (int[] fpi: fps) {
             Log.d(TAG, "fps " + Arrays.toString(fpi));
             if (fpi[1] >= 10000 && fpi[1] < fp[1]) {
@@ -95,8 +102,6 @@ public class SmarterCameraView extends JavaCameraView implements Camera.PictureC
         params.setAutoExposureLock(lock);
         mCamera.setParameters(params);
     }
-
-    public List<Integer> getZoomRatios() { return mCamera.getParameters().getZoomRatios(); }
 
     public List<Camera.Size> getResolutionList() {
         return mCamera.getParameters().getSupportedPreviewSizes();
