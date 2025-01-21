@@ -60,19 +60,10 @@ class SmarterHealthConnect(private val context: ComponentActivity) {
         )
         val records = listOf(weightRecord)
         try {
-            Log.d(TAG, "Client: " + healthConnectClient.toString())
             healthConnectClient.insertRecords(records)
             Toast.makeText(context, "Successfully recorded!", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             Toast.makeText(context, "Error inserting record: " + e.toString(), Toast.LENGTH_LONG).show()
-            throw e
-        }
-    }
-
-    /* FIXME: Ugly dirty hack, might just be easier to replace MainActivity by a Java version. */
-    fun writeWeightInputBlocking(weightInput: Double) {
-        runBlocking {
-            writeWeightInput(weightInput)
         }
     }
 }

@@ -17,6 +17,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.opencv.android.CameraBridgeViewBase
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame
@@ -29,15 +31,14 @@ import org.opencv.imgproc.Imgproc
 
 class MainActivity : ComponentActivity(), CvCameraViewListener2, View.OnClickListener,
     OnScaleGestureListener {
-    private var mOpenCvCameraView: SmarterCameraView? = null
-    private var mCameraViewScaleGestureDetector: ScaleGestureDetector? = null
-    private var mWeight: TextView? = null
-    private var mStartStop: Button? = null
-    private var mSend: Button? = null
+    private lateinit var mOpenCvCameraView: SmarterCameraView
+    private lateinit var mCameraViewScaleGestureDetector: ScaleGestureDetector
+    private lateinit var mWeight: TextView
+    private lateinit var mStartStop: Button
+    private lateinit var mSend: Button
 
-    private var digitizer: Digitizer? = null
-
-    private var mSmarterHealthConnect: SmarterHealthConnect? = null
+    private var mDigitizer = Digitizer();
+    private var mSmarterHealthConnect = SmarterHealthConnect(this)
 
     public override fun onCreate(savedInstanceState: Bundle?) {
         Log.i(TAG, "called onCreate")
@@ -50,8 +51,6 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2, View.OnClickLis
             (Toast.makeText(this, "OpenCV initialization failed!", Toast.LENGTH_LONG)).show()
             return
         }
-
-        digitizer = Digitizer()
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
@@ -67,27 +66,23 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2, View.OnClickLis
 
         mOpenCvCameraView =
             findViewById<View>(R.id.main_activity_smarter_camera_view) as SmarterCameraView
-        mOpenCvCameraView!!.visibility = SurfaceView.VISIBLE
-        mOpenCvCameraView!!.setCvCameraViewListener(this)
+        mOpenCvCameraView.visibility = SurfaceView.VISIBLE
+        mOpenCvCameraView.setCvCameraViewListener(this)
 
         mCameraViewScaleGestureDetector = ScaleGestureDetector(this, this)
 
         mStartStop = findViewById<View>(R.id.main_activity_start_stop) as Button
         mSend = findViewById<View>(R.id.main_activity_send) as Button
-        mSend!!.isEnabled = false
+        mSend.isEnabled = false
         mWeight = findViewById<View>(R.id.main_activity_weight) as TextView
 
-        mSmarterHealthConnect = SmarterHealthConnect(this)
-        runBlocking {
-            mSmarterHealthConnect!!.checkPermissions()
+        lifecycle.coroutineScope.launch {
+            mSmarterHealthConnect.checkPermissions()
         }
     }
 
-    protected fun onCameraPermissionGranted() {
-        val cameraViews = cameraViewList ?: return
-        for (cameraBridgeViewBase in cameraViews) {
-            cameraBridgeViewBase?.setCameraPermissionGranted()
-        }
+    private fun onCameraPermissionGranted() {
+        mOpenCvCameraView.setCameraPermissionGranted()
     }
 
     override fun onStart() {
@@ -102,6 +97,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2, View.OnClickLis
         }
     }
 
+    @Deprecated("")
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<String>,
@@ -113,54 +109,48 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2, View.OnClickLis
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 
-    protected val cameraViewList: List<CameraBridgeViewBase?>
-        get() = listOf(mOpenCvCameraView)
-
     /** End of CameraActivity class copies.  */
     public override fun onPause() {
         super.onPause()
-        if (mOpenCvCameraView != null) startStop(false)
+        startStop(false)
     }
 
     public override fun onResume() {
         super.onResume()
-        if (mOpenCvCameraView != null) {
-            startStop(true)
-            mOpenCvCameraView!!.setOnTouchListener { v: View?, event: MotionEvent? ->
-                mCameraViewScaleGestureDetector!!.onTouchEvent(
-                    event!!
-                )
-            }
+        startStop(true)
+        mOpenCvCameraView.setOnTouchListener { _: View?, event: MotionEvent? ->
+            mCameraViewScaleGestureDetector.onTouchEvent(
+                event!!
+            )
         }
-        if (mStartStop != null) mStartStop!!.setOnClickListener(this)
-        if (mSend != null) mSend!!.setOnClickListener(this)
+
+        mStartStop.setOnClickListener(this)
+        mSend.setOnClickListener(this)
     }
 
     public override fun onDestroy() {
         super.onDestroy()
-        if (mOpenCvCameraView != null) startStop(false)
+        startStop(false)
     }
 
-    override fun onCameraViewStarted(width: Int, height: Int) {
-    }
+    override fun onCameraViewStarted(width: Int, height: Int) {}
 
-    override fun onCameraViewStopped() {
-    }
+    override fun onCameraViewStopped() {}
 
     private var started = false
     private var readWeight = Double.NaN
-    fun startStop(start: Boolean) {
+    private fun startStop(start: Boolean) {
         if (start) {
             init = false
-            mSend!!.isEnabled = false
-            mStartStop!!.text = "Stop"
+            mSend.isEnabled = false
+            mStartStop.text = "Stop"
             readWeight = Double.NaN
-            mWeight!!.text = "??.?"
-            digitizer!!.reset()
-            mOpenCvCameraView!!.enableView()
+            mWeight.text = "??.?"
+            mDigitizer.reset()
+            mOpenCvCameraView.enableView()
         } else {
-            mStartStop!!.text = "Start"
-            mOpenCvCameraView!!.disableView()
+            mStartStop.text = "Start"
+            mOpenCvCameraView.disableView()
         }
         started = start
     }
@@ -170,7 +160,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2, View.OnClickLis
 
     override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
         beginSpan = detector.currentSpan
-        beginZoom = mOpenCvCameraView!!.zoom
+        beginZoom = mOpenCvCameraView.zoom
         return true
     }
 
@@ -183,7 +173,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2, View.OnClickLis
             "onScale zoom $beginSpan/$span => $newZoom($beginZoom"
         )
         /* TODO: Manually crop input more if newZoom > 1.0. */
-        mOpenCvCameraView!!.zoom = newZoom
+        mOpenCvCameraView.zoom = newZoom
         return true
     }
 
@@ -193,7 +183,10 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2, View.OnClickLis
         if (v === mStartStop) {
             startStop(!started)
         } else if (v === mSend) {
-            mSmarterHealthConnect!!.writeWeightInputBlocking(readWeight)
+            mSend.isEnabled = false;
+            lifecycle.coroutineScope.launch {
+                mSmarterHealthConnect.writeWeightInput(readWeight)
+            }
         }
     }
 
@@ -202,25 +195,24 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2, View.OnClickLis
     override fun onCameraFrame(inputFrame: CvCameraViewFrame): Mat {
         if (!init) {
             // TODO: Remember zoom level. Set zoom to maximum for now.
-            mOpenCvCameraView!!.zoom = 1.0
-            mOpenCvCameraView!!.setExposure(0.0)
-            mOpenCvCameraView!!.setSlowFps()
+            mOpenCvCameraView.zoom = 1.0
+            mOpenCvCameraView.setExposure(0.0)
+            mOpenCvCameraView.setSlowFps()
             init = true
             return inputFrame.rgba()
         }
 
         val inputColor = inputFrame.rgba()
-        val inputSize = inputColor.size()
 
         /* output color frame that includes drawn shapes. */
         val outputFull = Mat()
         inputColor.copyTo(outputFull)
         inputColor.release()
 
-        digitizer!!.parseFrame(inputFrame.gray(), outputFull)
+        mDigitizer.parseFrame(inputFrame.gray(), outputFull)
 
         /* Have we found a good readout yet? */
-        val p = digitizer!!.parsedText
+        val p = mDigitizer.getParsedText()
         if (p != null) {
             Imgproc.putText(
                 outputFull, ">$p", Point(0.0, outputFull.size().height - 50),
@@ -234,15 +226,15 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2, View.OnClickLis
             try {
                 readWeight = newp.toDouble()
                 this.runOnUiThread {
-                    mWeight!!.text = readWeight.toString()
-                    mSend!!.isEnabled = true
+                    mWeight.text = readWeight.toString()
+                    mSend.isEnabled = true
                     startStop(false)
                 }
             } catch (e: NumberFormatException) {
                 readWeight = Double.NaN
                 this.runOnUiThread {
-                    mWeight!!.text = "BAD"
-                    mSend!!.isEnabled = false
+                    mWeight.text = "BAD"
+                    mSend.isEnabled = false
                     startStop(false)
                 }
             }
