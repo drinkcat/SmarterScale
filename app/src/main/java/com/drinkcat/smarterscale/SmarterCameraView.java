@@ -38,13 +38,18 @@ public class SmarterCameraView extends JavaCameraView implements Camera.PictureC
         mCamera.setParameters(params);
     }
 
-    public void setZoom(int zoom) {
+    public void setZoom(double zoom) {
         Camera.Parameters params = mCamera.getParameters();
-        params.setZoom(zoom);
+        zoom = Math.min(zoom, 1.0);
+        zoom = Math.max(zoom, 0.0);
+        params.setZoom((int)(zoom * params.getMaxZoom()));
         mCamera.setParameters(params);
     }
 
-    public List<Integer> getZoomRatios() { return mCamera.getParameters().getZoomRatios(); }
+    public double getZoom() {
+        Camera.Parameters params = mCamera.getParameters();
+        return (double)params.getZoom()/params.getMaxZoom();
+    }
 
     public void setExposure(double exposure) {
         Camera.Parameters params = mCamera.getParameters();

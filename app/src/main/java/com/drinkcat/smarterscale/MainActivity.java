@@ -2,13 +2,15 @@ package com.drinkcat.smarterscale;
 
 import android.os.Bundle;
 import android.util.Log;
-import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.annotation.NonNull;
 
 import org.opencv.android.CameraActivity;
 import org.opencv.android.CameraBridgeViewBase;
@@ -25,10 +27,11 @@ import org.opencv.imgproc.Imgproc;
 import java.util.Collections;
 import java.util.List;
 
-public class MainActivity extends CameraActivity implements CvCameraViewListener2, View.OnTouchListener, View.OnClickListener {
+public class MainActivity extends CameraActivity implements CvCameraViewListener2, View.OnClickListener, ScaleGestureDetector.OnScaleGestureListener {
     private static final String TAG = "MainActivity";
 
     private SmarterCameraView mOpenCvCameraView;
+    private ScaleGestureDetector mCameraViewScaleGestureDetector;
     private TextView mWeight;
     private Button mStartStop;
     private Button mSend;
@@ -59,6 +62,8 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         mOpenCvCameraView.setVisibility(SurfaceView.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
 
+        mCameraViewScaleGestureDetector = new ScaleGestureDetector(this, this);
+
         mStartStop = (Button) findViewById(R.id.main_activity_start_stop);
         mSend = (Button) findViewById(R.id.main_activity_send);
         mSend.setEnabled(false);
@@ -79,7 +84,9 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         super.onResume();
         if (mOpenCvCameraView != null) {
             startStop(true);
-            mOpenCvCameraView.setOnTouchListener(this);
+            mOpenCvCameraView.setOnTouchListener(
+                    (v, event) -> mCameraViewScaleGestureDetector.onTouchEvent(event)
+            );
         }
         if (mStartStop != null) {
             mStartStop.setOnClickListener(this);
@@ -109,6 +116,7 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     public void startStop(boolean start) {
         if (start) {
             init = false;
+            mSend.setEnabled(false);
             mStartStop.setText("Stop");
             mWeight.setText("??.?");
             digitizer.reset();
@@ -120,11 +128,28 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         started = start;
     }
 
+    private float beginSpan;
+    private double beginZoom = 1.0;
+
     @Override
-    public boolean onTouch(View v, MotionEvent event) {
-        startStop(!started);
+    public boolean onScaleBegin(@NonNull ScaleGestureDetector detector) {
+        beginSpan = detector.getCurrentSpan();
+        beginZoom = mOpenCvCameraView.getZoom();
         return true;
     }
+
+    @Override
+    public boolean onScale(@NonNull ScaleGestureDetector detector) {
+        float span = detector.getCurrentSpan();
+        double newZoom = beginZoom + (span - beginSpan) / beginSpan;
+        Log.d(TAG, "onScale zoom " + beginSpan + "/" + span + " => " + newZoom + "(" + beginZoom);
+        /* TODO: Manually crop input more if newZoom > 1.0. */
+        mOpenCvCameraView.setZoom(newZoom);
+        return true;
+    }
+
+    @Override
+    public void onScaleEnd(@NonNull ScaleGestureDetector detector) {}
 
     @Override
     public void onClick(View v) {
@@ -137,11 +162,9 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
     boolean init = false;
 
     public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
-        // FIXME: we like zoom, zoomies!
-        // TODO: Remember zoom level, manually crop more if needed.
         if (!init) {
-            List<Integer> zooms = mOpenCvCameraView.getZoomRatios();
-            mOpenCvCameraView.setZoom(zooms.size() - 1);
+            // TODO: Remember zoom level. Set zoom to maximum for now.
+            mOpenCvCameraView.setZoom(1.0);
             mOpenCvCameraView.setExposure(0.0);
             mOpenCvCameraView.setSlowFps();
             init = true;
@@ -163,8 +186,14 @@ public class MainActivity extends CameraActivity implements CvCameraViewListener
         if (p != null) {
             Imgproc.putText(outputFull, ">" + p, new Point(0, outputFull.size().height-50),
                     Imgproc.FONT_HERSHEY_SIMPLEX, 10, new Scalar(255, 0, 0), 30);
+
+            // TODO: Make this configurable
+            // Parsed text post-processing, add comma
+            String newp = p.substring(0, p.length()-1) + "." + p.substring(p.length()-1);
+
             this.runOnUiThread(() -> {
-                mWeight.setText(p);
+                mWeight.setText(newp);
+                mSend.setEnabled(true);
                 startStop(false);
             });
         }
