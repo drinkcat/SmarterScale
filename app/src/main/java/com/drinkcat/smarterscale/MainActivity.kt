@@ -16,6 +16,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.iterator
@@ -57,6 +58,8 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
 
         setupBasicLayout()
         setupEventListeners()
+
+        requestCameraPermissions()
     }
 
     private fun openCVInit(): Boolean {
@@ -157,35 +160,27 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
             popup.show()
         }
     }
+
+    private fun requestCameraPermissions() {
+        if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            mOpenCvCameraView.setCameraPermissionGranted()
+            return
+        }
+
+        val requestPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+            isGranted ->
+                if (isGranted) {
+                    Log.d(TAG, "Camera permissions granted!")
+                    mOpenCvCameraView.setCameraPermissionGranted()
+                } else {
+                    Log.d(TAG, "Camera permissions denied!")
+                    Toast.makeText(this, "Camera permissions denied!", Toast.LENGTH_LONG).show()
+                }
+        }
+
+        requestPermission.launch(Manifest.permission.CAMERA)
+    }
     /* end of Init functions */
-
-    private fun onCameraPermissionGranted() {
-        mOpenCvCameraView.setCameraPermissionGranted()
-    }
-
-    override fun onStart() {
-        super.onStart()
-        var havePermission = true
-        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(arrayOf(Manifest.permission.CAMERA), CAMERA_PERMISSION_REQUEST_CODE)
-            havePermission = false
-        }
-        if (havePermission) {
-            onCameraPermissionGranted()
-        }
-    }
-
-    @Deprecated("")
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<String>,
-        grantResults: IntArray
-    ) {
-        if (requestCode == CAMERA_PERMISSION_REQUEST_CODE && grantResults.size > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            onCameraPermissionGranted()
-        }
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-    }
 
     public override fun onPause() {
         Log.d(TAG, "onPause");
