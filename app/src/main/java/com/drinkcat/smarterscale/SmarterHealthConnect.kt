@@ -39,7 +39,6 @@ class SmarterHealthConnect(private val context: ComponentActivity) {
         requestPermissions = context.registerForActivityResult(requestPermissionActivityContract) { granted ->
             if (granted.containsAll(permissions)) {
                 Log.d(TAG, "Health connect permissions granted!")
-                //Toast.makeText(context, "Health connect permissions granted!", Toast.LENGTH_LONG).show()
                 context.lifecycle.coroutineScope.launch { writeWeightInputCallback() }
             } else {
                 Log.d(TAG, "Health connect permissions denied!")
@@ -82,9 +81,11 @@ class SmarterHealthConnect(private val context: ComponentActivity) {
         val records = listOf(weightRecord)
         try {
             healthConnectClient.insertRecords(records)
-            Toast.makeText(context, "Successfully recorded: " + mWeightInput + "!", Toast.LENGTH_LONG).show()
+            Log.d(TAG, "Successfully recorded weight!")
+            Toast.makeText(context, "Successfully recorded: $mWeightInput!", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
-            Toast.makeText(context, "Error inserting record: " + e.toString(), Toast.LENGTH_LONG).show()
+            Log.d(TAG, "Error inserting record: $e")
+            Toast.makeText(context, "Error inserting record: $e", Toast.LENGTH_LONG).show()
         }
 
         mWeightInput = null;

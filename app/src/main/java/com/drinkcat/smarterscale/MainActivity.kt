@@ -191,10 +191,12 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     public override fun onResume() {
         Log.d(TAG, "onResume");
         super.onResume()
-        if (readWeight == null)
-            startStop(true)
-        else
-            refreshUI()
+        // TODO: There's a bug here, and I don't know how to fix this cleanly:
+        // When requesting permission, a new intent is created, and I don't know
+        // how to detect that I'm coming back from that (and _not_ start camera
+        // capture). If I test if mWeight != null, this fixes the issue, but
+        // then the camera doesn't auto-start when the app is "restarted".
+        startStop(true)
     }
 
     public override fun onDestroy() {
