@@ -3,6 +3,7 @@ package com.drinkcat.smarterscale
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
@@ -45,9 +46,12 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     /* State */
     private var started = false
     private var readWeight: Double? = null
-    private var debug = true
+
+    /* State to save as preferences */
     private var autoSubmit = false
     private var showHelp = true
+    private var debug = true
+    private var initZoom = 0.0
 
     /* Initialization functions */
     public override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,6 +65,9 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         setupEventListeners()
 
         createRequestCameraPermissions()
+
+        readPreferences()
+        refreshUI()
     }
 
     private fun openCVInit(): Boolean {
@@ -175,7 +182,26 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
                 }
         }
     }
-    /* end of Init functions */
+
+    private fun readPreferences() {
+        val pref = getPreferences(MODE_PRIVATE);
+        autoSubmit = pref.getBoolean("autoSubmit", false);
+        showHelp = pref.getBoolean("showHelp", true);
+        debug = pref.getBoolean("debug", false);
+        initZoom = pref.getFloat("initZoom", 0.0f).toDouble()
+    }
+    /* end of init functions */
+
+    private fun writePreferences() {
+        val pref = getPreferences(MODE_PRIVATE);
+        with (pref.edit()) {
+            putBoolean("autoSubmit", autoSubmit)
+            putBoolean("showHelp", showHelp)
+            putBoolean("debug", debug)
+            putFloat("initZoom", initZoom.toFloat())
+            apply()
+        }
+    }
 
     public override fun onStart() {
         Log.d(TAG, "onStart");
@@ -191,6 +217,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         Log.d(TAG, "onPause");
         super.onPause()
         startStop(false)
+        writePreferences()
     }
 
     public override fun onResume() {
@@ -263,8 +290,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     }
 
     override fun onCameraViewStarted(width: Int, height: Int) {
-        // TODO: Remember zoom level. Set zoom to maximum for now.
-        mOpenCvCameraView.setZoom(1.0)
+        mOpenCvCameraView.setZoom(initZoom)
         mOpenCvCameraView.setExposure(0.0)
         mOpenCvCameraView.setSlowFps()
     }
@@ -294,7 +320,9 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
             val newp = p.substring(0, p.length - 1) + "." + p.substring(p.length - 1)
 
             try {
+
                 readWeight = newp.toDouble()
+                initZoom = mOpenCvCameraView.zoom // Remember zoom setting
                 runOnUiThread {
                     if (autoSubmit)
                         submitWeight()
