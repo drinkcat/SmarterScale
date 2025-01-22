@@ -241,8 +241,13 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         mHelp.visibility = boolToVisible(!weightVisible)
         mStartStop.visibility = boolToVisible(debug || !started)
         mSubmit.visibility = boolToVisible(!autoSubmit)
-        if (started)
+        if (started) {
             mOpenCvCameraView.enableView()
+            if (debug)
+                mOpenCvCameraView.enableFpsMeter()
+            else
+                mOpenCvCameraView.disableFpsMeter()
+        }
         else
             mOpenCvCameraView.disableView()
     }
