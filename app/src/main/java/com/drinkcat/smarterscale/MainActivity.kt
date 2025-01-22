@@ -8,7 +8,6 @@ import android.os.Bundle
 import android.util.Log
 import android.view.MenuInflater
 import android.view.ScaleGestureDetector
-import android.view.SurfaceView
 import android.view.View
 import android.view.WindowManager
 import android.widget.Button
@@ -41,27 +40,40 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     private var mDigitizer = Digitizer();
     private var mSmarterHealthConnect = SmarterHealthConnect(this)
 
+    /* State */
     private var started = false
     private var readWeight: Double? = null
     private var debug = true
     private var autoSubmit = false
     private var showHelp = true
 
-    @SuppressLint("ClickableViewAccessibility")
+    /* Initialization functions */
     public override fun onCreate(savedInstanceState: Bundle?) {
         Log.i(TAG, "called onCreate")
         super.onCreate(savedInstanceState)
 
+        if (!openCVInit()) return
+        lifecycle.coroutineScope.launch {
+            mSmarterHealthConnect.checkPermissions()
+        }
+
+        setupBasicLayout()
+        setupEventListeners()
+    }
+
+    private fun openCVInit(): Boolean {
         if (OpenCVLoader.initLocal()) {
             Log.i(TAG, "OpenCV loaded successfully")
+            return true
         } else {
             Log.e(TAG, "OpenCV initialization failed!")
             (Toast.makeText(this, "OpenCV initialization failed!", Toast.LENGTH_LONG)).show()
-            return
+            return false
         }
+    }
 
+    private fun setupBasicLayout() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
         this.enableEdgeToEdge()
         setContentView(R.layout.activity_main)
         ViewCompat.setOnApplyWindowInsetsListener(
@@ -70,10 +82,6 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
-        }
-
-        lifecycle.coroutineScope.launch {
-            mSmarterHealthConnect.checkPermissions()
         }
 
         mOpenCvCameraView =
@@ -87,11 +95,12 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         mSubmit = findViewById<View>(R.id.main_activity_submit) as Button
         mSubmit.isEnabled = false
 
-        debug = true
-        showHelp = true
         refreshUI()
+    }
 
-        val scalegesturedetector = ScaleGestureDetector(this,
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupEventListeners() {
+        val scaleGestureDetector = ScaleGestureDetector(this,
             object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
                 private var beginSpan = 0f
                 private var beginZoom = 1.0
@@ -103,7 +112,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
                 }
 
                 override fun onScale(detector: ScaleGestureDetector): Boolean {
-                    if (!java.lang.Double.isFinite(beginZoom)) return true
+                    if (!beginZoom.isFinite() || beginSpan == 0f) return true
                     val span = detector.currentSpan
                     val newZoom = beginZoom + (span - beginSpan) / beginSpan
                     Log.d(
@@ -116,7 +125,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
                 }
             })
         mOpenCvCameraView.setOnTouchListener { _, event ->
-            scalegesturedetector.onTouchEvent(event)
+            scaleGestureDetector.onTouchEvent(event)
         }
 
         mStartStop.setOnClickListener { startStop(!started) }
@@ -150,15 +159,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
             popup.show()
         }
     }
-
-    private fun submitWeight() {
-        if (readWeight == null)
-            return;
-        mSubmit.isEnabled = false;
-        lifecycle.coroutineScope.launch {
-            mSmarterHealthConnect.writeWeightInput(readWeight!!)
-        }
-    }
+    /* end of Init functions */
 
     private fun onCameraPermissionGranted() {
         mOpenCvCameraView.setCameraPermissionGranted()
@@ -203,9 +204,14 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         startStop(false)
     }
 
-    override fun onCameraViewStarted(width: Int, height: Int) {}
-
-    override fun onCameraViewStopped() {}
+    private fun submitWeight() {
+        if (readWeight == null)
+            return;
+        mSubmit.isEnabled = false;
+        lifecycle.coroutineScope.launch {
+            mSmarterHealthConnect.writeWeightInput(readWeight!!)
+        }
+    }
 
     /* Refresh UI elements depending on state. */
     private fun refreshUI() {
@@ -238,7 +244,6 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     private fun startStop(start: Boolean) {
         started = start
         if (start) {
-            init = false
             mSubmit.isEnabled = false
             readWeight = null
             mDigitizer.reset()
@@ -246,18 +251,15 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         refreshUI()
     }
 
-    var init: Boolean = false
+    override fun onCameraViewStarted(width: Int, height: Int) {
+        // TODO: Remember zoom level. Set zoom to maximum for now.
+        mOpenCvCameraView.setZoom(1.0)
+        mOpenCvCameraView.setExposure(0.0)
+        mOpenCvCameraView.setSlowFps()
+    }
+    override fun onCameraViewStopped() {}
 
     override fun onCameraFrame(inputFrame: CvCameraViewFrame): Mat {
-        if (!init) {
-            // TODO: Remember zoom level. Set zoom to maximum for now.
-            mOpenCvCameraView.zoom = 1.0
-            mOpenCvCameraView.setExposure(0.0)
-            mOpenCvCameraView.setSlowFps()
-            init = true
-            return inputFrame.rgba()
-        }
-
         val inputColor = inputFrame.rgba()
 
         /* output color frame that includes drawn shapes. */
@@ -282,7 +284,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
 
             try {
                 readWeight = newp.toDouble()
-                this.runOnUiThread {
+                runOnUiThread {
                     if (autoSubmit)
                         submitWeight()
                     else
@@ -291,7 +293,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
                 }
             } catch (e: NumberFormatException) {
                 readWeight = Double.NaN
-                this.runOnUiThread {
+                runOnUiThread {
                     mSubmit.isEnabled = false
                     startStop(false)
                 }
