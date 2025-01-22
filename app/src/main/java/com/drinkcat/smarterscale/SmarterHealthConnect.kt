@@ -82,7 +82,7 @@ class SmarterHealthConnect(private val context: ComponentActivity) {
         try {
             healthConnectClient.insertRecords(records)
             Log.d(TAG, "Successfully recorded weight!")
-            Toast.makeText(context, "Successfully recorded: $mWeightInput!", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Successfully recorded weight!", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             Log.d(TAG, "Error inserting record: $e")
             Toast.makeText(context, "Error inserting record: $e", Toast.LENGTH_LONG).show()

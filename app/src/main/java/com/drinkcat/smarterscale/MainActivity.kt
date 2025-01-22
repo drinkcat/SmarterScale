@@ -16,6 +16,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -59,7 +60,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         setupBasicLayout()
         setupEventListeners()
 
-        requestCameraPermissions()
+        createRequestCameraPermissions()
     }
 
     private fun openCVInit(): Boolean {
@@ -161,13 +162,9 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         }
     }
 
-    private fun requestCameraPermissions() {
-        if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-            mOpenCvCameraView.setCameraPermissionGranted()
-            return
-        }
-
-        val requestPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+    private lateinit var mRequestPermission: ActivityResultLauncher<String>
+    private fun createRequestCameraPermissions() {
+        mRequestPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
             isGranted ->
                 if (isGranted) {
                     Log.d(TAG, "Camera permissions granted!")
@@ -177,10 +174,18 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
                     Toast.makeText(this, "Camera permissions denied!", Toast.LENGTH_LONG).show()
                 }
         }
-
-        requestPermission.launch(Manifest.permission.CAMERA)
     }
     /* end of Init functions */
+
+    public override fun onStart() {
+        Log.d(TAG, "onStart");
+        super.onStart()
+
+        if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
+            mOpenCvCameraView.setCameraPermissionGranted()
+        else
+            mRequestPermission.launch(Manifest.permission.CAMERA)
+    }
 
     public override fun onPause() {
         Log.d(TAG, "onPause");
