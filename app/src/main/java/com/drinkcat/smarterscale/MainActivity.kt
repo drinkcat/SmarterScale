@@ -1,6 +1,7 @@
 package com.drinkcat.smarterscale
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -41,28 +42,12 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     private var mSmarterHealthConnect = SmarterHealthConnect(this)
 
     private var started = false
-    private var readWeight = Double.NaN
+    private var readWeight: Double? = null
     private var debug = true
-        set(value) {
-            field = value
-            mStartStop.visibility =
-                if (debug || !started) View.VISIBLE else View.INVISIBLE
-        }
     private var autoSubmit = false
-        set(value) {
-            field = value
-            mSubmit.visibility =
-                if (autoSubmit) View.INVISIBLE else View.VISIBLE
-        }
     private var showHelp = true
-        set(value) {
-            field = value
-            mHelp.visibility =
-                if (showHelp && !readWeight.isFinite()) View.VISIBLE else View.INVISIBLE
-            mWeight.visibility =
-                if (showHelp) View.INVISIBLE else View.VISIBLE
-        }
 
+    @SuppressLint("ClickableViewAccessibility")
     public override fun onCreate(savedInstanceState: Bundle?) {
         Log.i(TAG, "called onCreate")
         super.onCreate(savedInstanceState)
@@ -93,7 +78,6 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
 
         mOpenCvCameraView =
             findViewById<View>(R.id.main_activity_smarter_camera_view) as SmarterCameraView
-        mOpenCvCameraView.visibility = SurfaceView.VISIBLE
         mOpenCvCameraView.setCvCameraViewListener(this)
 
         mHelp = findViewById<View>(R.id.main_activity_help) as TextView
@@ -105,6 +89,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
 
         debug = true
         showHelp = true
+        refreshUI()
 
         val scalegesturedetector = ScaleGestureDetector(this,
             object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -134,18 +119,14 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
             scalegesturedetector.onTouchEvent(event)
         }
 
-        mStartStop.setOnClickListener {
-            startStop(!started)
-        }
-        mSubmit.setOnClickListener {
-            submitWeight()
-        }
+        mStartStop.setOnClickListener { startStop(!started) }
+        mSubmit.setOnClickListener { submitWeight() }
 
         val menulistener = PopupMenu.OnMenuItemClickListener { item ->
             when (item.itemId) {
-                R.id.menu_debug -> { debug = !item.isChecked(); true }
-                R.id.menu_auto -> { autoSubmit = !item.isChecked(); true }
-                R.id.menu_showhelp -> { showHelp = !item.isChecked(); true }
+                R.id.menu_debug -> { debug = !item.isChecked(); refreshUI(); true }
+                R.id.menu_auto -> { autoSubmit = !item.isChecked(); refreshUI(); true }
+                R.id.menu_showhelp -> { showHelp = !item.isChecked(); refreshUI(); true }
                 R.id.menu_privacy -> {
                     startActivity(Intent(this, PermissionsRationaleActivity::class.java));
                     true
@@ -171,9 +152,11 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     }
 
     private fun submitWeight() {
+        if (readWeight == null)
+            return;
         mSubmit.isEnabled = false;
         lifecycle.coroutineScope.launch {
-            mSmarterHealthConnect.writeWeightInput(readWeight)
+            mSmarterHealthConnect.writeWeightInput(readWeight!!)
         }
     }
 
@@ -205,7 +188,6 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 
-    /** End of CameraActivity class copies.  */
     public override fun onPause() {
         super.onPause()
         startStop(false)
@@ -225,28 +207,43 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
 
     override fun onCameraViewStopped() {}
 
+    /* Refresh UI elements depending on state. */
+    private fun refreshUI() {
+        /* Text content */
+        mStartStop.text = (
+            if (started) "Stop"
+            else if (readWeight != null) "Restart"
+            else "Start"
+                )
+        mWeight.text = (
+            if (readWeight == null) "??.?"
+            else if (readWeight!!.isFinite()) readWeight!!.toString()
+            else "BAD"
+                )
+
+        /* Visibility */
+        fun boolToVisible(b: Boolean): Int = if (b) View.VISIBLE else View.INVISIBLE
+
+        val weightVisible = readWeight != null || !showHelp
+        mWeight.visibility = boolToVisible(weightVisible)
+        mHelp.visibility = boolToVisible(!weightVisible)
+        mStartStop.visibility = boolToVisible(debug || !started)
+        mSubmit.visibility = boolToVisible(!autoSubmit)
+        if (started)
+            mOpenCvCameraView.enableView()
+        else
+            mOpenCvCameraView.disableView()
+    }
+
     private fun startStop(start: Boolean) {
+        started = start
         if (start) {
             init = false
             mSubmit.isEnabled = false
-            mStartStop.text = "Stop"
-            mStartStop.visibility =
-                if (debug) View.VISIBLE else View.INVISIBLE
-            readWeight = Double.NaN
-            mWeight.text = "??.?"
-            mHelp.visibility = if (showHelp) View.VISIBLE else View.INVISIBLE
-            mWeight.visibility = if (showHelp) View.INVISIBLE else View.VISIBLE
+            readWeight = null
             mDigitizer.reset()
-            mOpenCvCameraView.enableView()
-        } else {
-            if (readWeight.isFinite())
-                mStartStop.text = "Restart"
-            else
-                mStartStop.text = "Start"
-            mStartStop.visibility = View.VISIBLE
-            mOpenCvCameraView.disableView()
         }
-        started = start
+        refreshUI()
     }
 
     var init: Boolean = false
@@ -286,9 +283,6 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
             try {
                 readWeight = newp.toDouble()
                 this.runOnUiThread {
-                    mHelp.visibility = View.INVISIBLE
-                    mWeight.text = readWeight.toString()
-                    mWeight.visibility = View.VISIBLE
                     if (autoSubmit)
                         submitWeight()
                     else
@@ -298,9 +292,6 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
             } catch (e: NumberFormatException) {
                 readWeight = Double.NaN
                 this.runOnUiThread {
-                    mHelp.visibility = View.INVISIBLE
-                    mWeight.text = "BAD"
-                    mWeight.visibility = View.VISIBLE
                     mSubmit.isEnabled = false
                     startStop(false)
                 }
