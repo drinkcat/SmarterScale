@@ -53,9 +53,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         super.onCreate(savedInstanceState)
 
         if (!openCVInit()) return
-        lifecycle.coroutineScope.launch {
-            mSmarterHealthConnect.checkPermissions()
-        }
+        mSmarterHealthConnect.init()
 
         setupBasicLayout()
         setupEventListeners()
@@ -190,22 +188,28 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     }
 
     public override fun onPause() {
+        Log.d(TAG, "onPause");
         super.onPause()
         startStop(false)
     }
 
     public override fun onResume() {
+        Log.d(TAG, "onResume");
         super.onResume()
-        startStop(true)
+        if (readWeight == null)
+            startStop(true)
+        else
+            refreshUI()
     }
 
     public override fun onDestroy() {
+        Log.d(TAG, "onDestroy");
         super.onDestroy()
         startStop(false)
     }
 
     private fun submitWeight() {
-        if (readWeight == null)
+        if (readWeight == null || !readWeight!!.isFinite())
             return;
         mSubmit.isEnabled = false;
         lifecycle.coroutineScope.launch {
