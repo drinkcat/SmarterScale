@@ -2,7 +2,17 @@
 
 *Let's make that smart scale a little less dumb*
 
-This is a simple app that reads weighing scale number using your phone camera (OCR), and writes it to [Android Health Connect](https://health.google/health-connect-android/).
+This is a simple app that reads weighing scale number using your phone camera (OCR),
+and writes it to [Android Health Connect](https://health.google/health-connect-android/).
+
+Interested? Download the APK here.
+
+I might end up publishing this on the Play Store, but I need enough people interested
+in testing early version. If you are interested, please join
+[this group](https://groups.google.com/g/smarterscale-testers), and I will send you an email
+if and when this happens.
+
+## Usage
 
 To use the app, follow these steps:
  1. Step on scale, wait for a reading.
