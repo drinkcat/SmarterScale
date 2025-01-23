@@ -38,13 +38,13 @@ my simple algorithm to work.
 
 ## More technical background
 
-The computer vision algorithm is very simple, and uses OpenCV. There's 3 main steps:
+The computer vision algorithm is very simple, and uses OpenCV. There's 4 main steps:
  - Threshold the image (blur, local adaptive threshold, some morphological opening)
  - Look for horizontal and vertical segments (this assume there is enough gap between the segments)
  - Group those segments into digits
- - Figure out which digit it is based on segment position.
- - Extract number based on those digits.
- - Once we extract the same number a few times, consider it good.
+   - Figure out which digit it is based on segment position.
+   - Extract number based on those digits.
+ - Once we extract the same number a few times, across different frames, consider it good.
 
 I had more complex logic in earlier version of the app, but the above seems to work well enough,
 and at least for the scale in question, is quite resiliant to external lighting changes.
@@ -68,7 +68,8 @@ Also, I'm absolutely not an Android developer:
 
 ### What about openScale?
 
-I even tried to understand if I could add support in [openScale](https://github.com/oliexdev/openScale),
-but sadly the data appears to be [encrypted](https://github.com/oliexdev/openScale/issues/1105). And
-even if I could add support, I'm unsure if this would have helped, as I'm not sure if the issue with
-my scale is hardware or software.
+I even tried to understand if I could add support for my Fitbit Aria Air in
+[openScale](https://github.com/oliexdev/openScale), but sadly the data appears to be
+[encrypted](https://github.com/oliexdev/openScale/issues/1105). And even if I could add support,
+I'm unsure if this would have helped, as I'm not sure if the connectivity issue with my scale
+would be fixed with another app.
