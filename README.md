@@ -19,22 +19,26 @@ Or in video form, takes less than 10 seconds:
 
 ## Background
 
-I have a smart scale that is supposed to be able to connect via Bluetooth, but the connection often fails.
+I have a smart scale that is supposed to be able to connect via Bluetooth, but the connection often fails,
+so I was looking for a simplified flow to record the weight (that doesn't require Bluetooth, or buying
+a new scale...).
 
 The original flow is supposed to look like this:
- 1. Step on balance, wait for weight to be measured (the display blinks and holds the measured wait).
- 2. Open app.
- 3. Press on "+" then "Weight" (that steps wasn't necessary at some point in the past).
- 4. Wait at this screen, and hope that it automatically connects to the balance (in my experience this often fails).
+ 1. Step on scale, wait for weight to be measured (the display blinks and holds the measured wait).
+ 2. Open scale app
+ 3. Press on "+" then "Weight" (that steps wasn't necessary at some point in the past?).
+ 4. Wait at this screen, and hope that it automatically connects to the scale (in my experience this often fails).
  5. Press submit.
 
 As you can see, the flow isn't _that_ different from what SmarterScale does, and in my (limited) experience, SmarterScale is more reliable.
 
 ## Supported hardware
 
-I've only tested this on a Fitbit Aria Air scale. The display makes it easy to separate the
-segments: It is relatively large, bright, and there is enough gap between the segments for
+I've only tested this on a Fitbit Aria Air scale. The display makes it easy to read out the
+digits: It is relatively large, bright, and there is enough gap between the segments for
 my simple algorithm to work.
+
+You're welcome to try it out on other scales.
 
 ## More technical background
 
@@ -71,5 +75,5 @@ Also, I'm absolutely not an Android developer:
 I even tried to understand if I could add support for my Fitbit Aria Air in
 [openScale](https://github.com/oliexdev/openScale), but sadly the data appears to be
 [encrypted](https://github.com/oliexdev/openScale/issues/1105). And even if I could add support,
-I'm unsure if this would have helped, as I'm not sure if the connectivity issue with my scale
+this may not have helped, as I'm not sure if the connectivity(?) issues with my scale
 would be fixed with another app.
