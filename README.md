@@ -10,7 +10,7 @@ Interested? Download and install the [apk](https://github.com/drinkcat/SmarterSc
 particular Android flavor may vary)*
 
 I might end up publishing this on the Play Store, but I need enough people interested
-in testing early version. If you are interested, please join
+in testing early versions. If you are interested, please join
 [this group](https://groups.google.com/g/smarterscale-testers), and I will send you an email
 if and when this happens.
 
