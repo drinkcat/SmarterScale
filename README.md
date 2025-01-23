@@ -6,8 +6,8 @@ This is a simple app that reads weighing scale number using your phone camera (O
 and writes it to [Android Health Connect](https://health.google/health-connect-android/).
 
 Interested? Download the [apk](https://github.com/drinkcat/SmarterScale/releases/download/v1.0/smarterscale-v1.0.apk).
-(You will need to authorize installing apps from "Unknown Sources", the flow on your
-particular Android flavor may vary).
+*(You will need to authorize installing apps from "Unknown Sources", the flow on your
+particular Android flavor may vary)*
 
 I might end up publishing this on the Play Store, but I need enough people interested
 in testing early version. If you are interested, please join
