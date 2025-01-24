@@ -93,7 +93,7 @@ public class Digitizer {
         rect = new Rect(crop.x, (int)(inputSize.height-max_height)/2, crop.width, max_height);
         Imgproc.rectangle(output, rect, new Scalar(255,0,0), (int)(0.005*inputSize.width));
 
-        //outputCrop.release();
+        outputCrop.release();
     }
 
     /* Blur, threshold and transform. */

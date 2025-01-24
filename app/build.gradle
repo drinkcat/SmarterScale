@@ -29,10 +29,12 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled true
-            shrinkResources true
+            /* FIXME: openCV doesn't like minify? Disable. */
+            minifyEnabled false
+            shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.debug
+            /* DEBUG ONLY */
+            //signingConfig signingConfigs.debug
         }
 
         debug {

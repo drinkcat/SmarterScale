@@ -26,10 +26,12 @@ import kotlinx.coroutines.launch
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2
 import org.opencv.android.OpenCVLoader
+import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.Point
 import org.opencv.core.Scalar
 import org.opencv.imgproc.Imgproc
+
 
 class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     /* UI elements */
@@ -299,12 +301,15 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         mOpenCvCameraView.setZoom(initZoom)
         mOpenCvCameraView.setExposure(0.0)
         mOpenCvCameraView.setSlowFps()
+        outputFull = Mat(height, width, CvType.CV_8UC4)
     }
-    override fun onCameraViewStopped() {}
+    override fun onCameraViewStopped() {
+        outputFull.release()
+    }
 
     override fun onCameraFrame(inputFrame: CvCameraViewFrame): Mat {
-        // This breaks everything
-        //Runtime.getRuntime().gc();
+        // NOTE: Consistent way to break app if minify is enabled
+        // Runtime.getRuntime().gc();
 
         val inputColor = inputFrame.rgba()
 
