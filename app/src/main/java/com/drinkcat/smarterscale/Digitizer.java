@@ -183,7 +183,7 @@ public class Digitizer {
         for (int ux: keys)
             sb.append(digits.get(ux));
         String s = sb.toString();
-        Log.d(TAG, "Parsed: " + s);
+        Log.d(TAG, "Parsed: <" + s + ">");
 
         if (output != null)
             Imgproc.putText(output, s, new Point(0, output.size().height),

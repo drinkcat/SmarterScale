@@ -16,6 +16,16 @@
         android:paddingVertical="10dp"
         >
 
+        <TextView
+            android:id="@+id/main_activity_version"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/versionName"
+            android:textColor="@color/material_dynamic_secondary50"
+            android:textSize="12sp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent" />
+
         <Button
             android:id="@+id/dropdown_menu"
             android:layout_width="50dp"

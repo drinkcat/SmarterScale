@@ -3,7 +3,6 @@ package com.drinkcat.smarterscale
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
@@ -34,6 +33,7 @@ import org.opencv.imgproc.Imgproc
 
 class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     /* UI elements */
+    private lateinit var mVersion: TextView
     private lateinit var mOpenCvCameraView: SmarterCameraView
     private lateinit var mHelp: TextView
     private lateinit var mWeight: TextView
@@ -97,6 +97,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
             findViewById<View>(R.id.main_activity_smarter_camera_view) as SmarterCameraView
         mOpenCvCameraView.setCvCameraViewListener(this)
 
+        mVersion = findViewById<View>(R.id.main_activity_version) as TextView
         mHelp = findViewById<View>(R.id.main_activity_help) as TextView
         mWeight = findViewById<View>(R.id.main_activity_weight) as TextView
 
@@ -263,6 +264,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         /* Visibility */
         fun boolToVisible(b: Boolean): Int = if (b) View.VISIBLE else View.INVISIBLE
 
+        mVersion.visibility = boolToVisible(debug)
         val weightVisible = readWeight != null || !showHelp
         mWeight.visibility = boolToVisible(weightVisible)
         mHelp.visibility = boolToVisible(!weightVisible)
