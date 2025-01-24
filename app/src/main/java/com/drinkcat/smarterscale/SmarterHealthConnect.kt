@@ -11,8 +11,28 @@ import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.units.Mass
 import androidx.lifecycle.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import java.time.ZonedDateTime
+
+enum class WeightUnit {
+    KG, LB;
+
+    override fun toString(): String {
+        return when(this) {
+            KG -> "kg"
+            LB -> "lb"
+        }
+    }
+
+    companion object {
+        fun fromString(s: String): WeightUnit {
+            return when(s) {
+                "kg" -> KG
+                "lb" -> LB
+                else -> throw IllegalArgumentException("Invalid weight string $s.")
+            }
+        }
+    }
+}
 
 class SmarterHealthConnect(private val context: ComponentActivity) {
     private final val TAG = "SmarterHealthConnect"
@@ -64,7 +84,7 @@ class SmarterHealthConnect(private val context: ComponentActivity) {
     }
 
     /* Saved weight for callback */
-    private var mWeightInput: Double? = null
+    private var mWeightInput: Mass? = null
     /**
      * Writes [WeightRecord] to Health Connect.
      */
@@ -74,7 +94,7 @@ class SmarterHealthConnect(private val context: ComponentActivity) {
 
         val time = ZonedDateTime.now().withNano(0)
         val weightRecord = WeightRecord(
-            weight = Mass.kilograms(mWeightInput!!),
+            weight = mWeightInput!!,
             time = time.toInstant(),
             zoneOffset = time.offset
         )
@@ -94,11 +114,14 @@ class SmarterHealthConnect(private val context: ComponentActivity) {
     /**
      * Writes [WeightRecord] to Health Connect.
      */
-    suspend fun writeWeightInput(weightInput: Double) {
+    suspend fun writeWeightInput(weightInput: Double, unit: WeightUnit) {
         if (!init)
             return
 
-        mWeightInput = weightInput
+        mWeightInput = when(unit) {
+            WeightUnit.KG -> Mass.kilograms(weightInput)
+            WeightUnit.LB -> Mass.pounds(weightInput)
+        }
         if (checkOrRequestPermissions()) {
             writeWeightInputCallback()
         } /* else: ActivityResult will launch the callback. */

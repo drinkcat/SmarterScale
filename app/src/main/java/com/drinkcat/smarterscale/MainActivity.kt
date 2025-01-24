@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     private var readWeight: Double? = null
 
     /* State to save as preferences */
+    private var unit = WeightUnit.KG
     private var autoSubmit = false
     private var showHelp = true
     private var debug = true
@@ -149,9 +150,11 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
 
         val menulistener = PopupMenu.OnMenuItemClickListener { item ->
             when (item.itemId) {
-                R.id.menu_debug -> { debug = !item.isChecked(); refreshUI(); true }
-                R.id.menu_auto -> { autoSubmit = !item.isChecked(); refreshUI(); true }
-                R.id.menu_showhelp -> { showHelp = !item.isChecked(); refreshUI(); true }
+                R.id.menu_unit_kg -> { unit = WeightUnit.KG; refreshUI(); true }
+                R.id.menu_unit_lb -> { unit = WeightUnit.LB; refreshUI(); true }
+                R.id.menu_debug -> { debug = !item.isChecked; refreshUI(); true }
+                R.id.menu_auto -> { autoSubmit = !item.isChecked; refreshUI(); true }
+                R.id.menu_showhelp -> { showHelp = !item.isChecked; refreshUI(); true }
                 R.id.menu_privacy -> {
                     startActivity(Intent(this, PermissionsRationaleActivity::class.java));
                     true
@@ -166,6 +169,8 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
             inflater.inflate(R.menu.main_menu, popup.menu)
             for (item in popup.menu.iterator()) {
                 when (item.itemId) {
+                    R.id.menu_unit_kg -> if (unit == WeightUnit.KG) item.setChecked(true)
+                    R.id.menu_unit_lb -> if (unit == WeightUnit.LB) item.setChecked(true)
                     R.id.menu_debug -> item.setChecked(debug)
                     R.id.menu_auto -> item.setChecked(autoSubmit)
                     R.id.menu_showhelp -> item.setChecked(showHelp)
@@ -192,6 +197,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
 
     private fun readPreferences() {
         val pref = getPreferences(MODE_PRIVATE);
+        unit = WeightUnit.fromString(pref.getString("unit", "kg")!!)
         autoSubmit = pref.getBoolean("autoSubmit", false);
         showHelp = pref.getBoolean("showHelp", true);
         debug = pref.getBoolean("debug", false);
@@ -249,7 +255,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
             return;
         mSubmit.isEnabled = false;
         lifecycle.coroutineScope.launch {
-            mSmarterHealthConnect.writeWeightInput(readWeight!!)
+            mSmarterHealthConnect.writeWeightInput(readWeight!!, unit)
         }
     }
 
