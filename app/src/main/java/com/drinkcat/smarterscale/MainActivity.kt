@@ -43,6 +43,9 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     private var mDigitizer = Digitizer();
     private var mSmarterHealthConnect = SmarterHealthConnect(this)
 
+    /* output color frame that includes drawn shapes. */
+    private lateinit var outputFull: Mat
+
     /* State */
     private var started = false
     private var readWeight: Double? = null
@@ -59,6 +62,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         super.onCreate(savedInstanceState)
 
         if (!openCVInit()) return
+        outputFull = Mat()
         mSmarterHealthConnect.init()
 
         setupBasicLayout()
@@ -299,10 +303,11 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     override fun onCameraViewStopped() {}
 
     override fun onCameraFrame(inputFrame: CvCameraViewFrame): Mat {
+        // This breaks everything
+        //Runtime.getRuntime().gc();
+
         val inputColor = inputFrame.rgba()
 
-        /* output color frame that includes drawn shapes. */
-        val outputFull = Mat()
         inputColor.copyTo(outputFull)
         inputColor.release()
 
@@ -322,7 +327,6 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
             val newp = p.substring(0, p.length - 1) + "." + p.substring(p.length - 1)
 
             try {
-
                 readWeight = newp.toDouble()
                 initZoom = mOpenCvCameraView.zoom // Remember zoom setting
                 runOnUiThread {

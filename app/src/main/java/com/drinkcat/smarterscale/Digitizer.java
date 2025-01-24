@@ -60,15 +60,18 @@ public class Digitizer {
                 (int)(inputSize.width - roi_size)/2, (int)(inputSize.height - roi_size)/ 2,
                 roi_size, roi_size);
         Mat inputGray = input.submat(crop);
+        input.release();
         Mat outputCrop = output.submat(crop);
 
         /* Blur, threshold and transform. */
         Mat thresh = threshold(inputGray, inputSize);
+        inputGray.release();
 
         /* Get contours */
         List<MatOfPoint> cnts = new ArrayList<MatOfPoint>();
         Mat hierarchy = new Mat();
         Imgproc.findContours(thresh, cnts, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
+        hierarchy.release();
         /* Draw contours for debugging. */
         if (debug)
             Imgproc.drawContours(outputCrop, cnts, -1, new Scalar(0,128,0), 2);
@@ -79,7 +82,7 @@ public class Digitizer {
         thresh.release();
 
         LinkedList<TaggedRect> segments = findSegments(debug ? outputCrop : null, int_thresh, cnts);
-        thresh.release();
+        int_thresh.release();
         findDigits(debug ? outputCrop : null, segments);
 
         /* Draw guiding rectangle for the user. */
@@ -89,6 +92,8 @@ public class Digitizer {
         Imgproc.rectangle(output, rect, new Scalar(255,0,0), (int)(0.005*inputSize.width));
         rect = new Rect(crop.x, (int)(inputSize.height-max_height)/2, crop.width, max_height);
         Imgproc.rectangle(output, rect, new Scalar(255,0,0), (int)(0.005*inputSize.width));
+
+        //outputCrop.release();
     }
 
     /* Blur, threshold and transform. */
