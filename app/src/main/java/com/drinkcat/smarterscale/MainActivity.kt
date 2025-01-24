@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     private lateinit var mOpenCvCameraView: SmarterCameraView
     private lateinit var mHelp: TextView
     private lateinit var mWeight: TextView
+    private lateinit var mWeightUnit: TextView
     private lateinit var mStartStop: Button
     private lateinit var mSubmit: Button
 
@@ -107,6 +108,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         mVersion = findViewById<View>(R.id.main_activity_version) as TextView
         mHelp = findViewById<View>(R.id.main_activity_help) as TextView
         mWeight = findViewById<View>(R.id.main_activity_weight) as TextView
+        mWeightUnit = findViewById<View>(R.id.main_activity_weight_unit) as TextView
 
         mStartStop = findViewById<View>(R.id.main_activity_start_stop) as Button
         mSubmit = findViewById<View>(R.id.main_activity_submit) as Button
@@ -272,6 +274,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
             else if (readWeight!!.isFinite()) readWeight!!.toString()
             else "BAD"
                 )
+        mWeightUnit.text = unit.toString()
 
         /* Visibility */
         fun boolToVisible(b: Boolean): Int = if (b) View.VISIBLE else View.INVISIBLE
@@ -279,6 +282,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         mVersion.visibility = boolToVisible(debug)
         val weightVisible = readWeight != null || !showHelp
         mWeight.visibility = boolToVisible(weightVisible)
+        mWeightUnit.visibility = boolToVisible(weightVisible)
         mHelp.visibility = boolToVisible(!weightVisible)
         mStartStop.visibility = boolToVisible(debug || !started)
         mSubmit.visibility = boolToVisible(!autoSubmit)

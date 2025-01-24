@@ -48,14 +48,36 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
-        <TextView
-            android:id="@+id/main_activity_weight"
+        <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="\?\?\?.\?"
-            android:textAlignment="center"
-            android:textSize="96sp"
-            android:visibility="invisible" />
+            android:layout_height="match_parent">
+
+            <TextView
+                android:id="@+id/main_activity_weight"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="\?\?.\?"
+                android:textAlignment="center"
+                android:textSize="96sp"
+                android:visibility="visible"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintVertical_bias="0.5" />
+
+            <TextView
+                android:id="@+id/main_activity_weight_unit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="20dp"
+                android:text="kg"
+                android:textAlignment="center"
+                android:textSize="16sp"
+                android:visibility="visible"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toEndOf="@+id/main_activity_weight" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
 
         <TextView
             android:id="@+id/main_activity_help"
@@ -65,7 +87,8 @@
             android:layout_marginHorizontal="10dp"
             android:text="@string/help"
             android:textAlignment="center"
-            android:textSize="16sp" />
+            android:textSize="16sp"
+            android:visibility="invisible" />
 
     </FrameLayout>
 
