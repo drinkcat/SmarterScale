@@ -11,8 +11,8 @@ android {
         applicationId "com.drinkcat.smarterscale"
         minSdk 28
         targetSdk 35
-        versionCode 1
-        versionName "1.0"
+        versionCode 10100 // Format: MMmmpp (Major minor patch)
+        versionName "1.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
