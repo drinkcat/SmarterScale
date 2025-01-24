@@ -5,7 +5,7 @@
 This is a simple app that reads weighing scale number using your phone camera (OCR),
 and writes it to [Android Health Connect](https://health.google/health-connect-android/).
 
-Interested? Download and install the [apk](https://github.com/drinkcat/SmarterScale/releases/download/v1.0/smarterscale-v1.0.apk).
+Interested? Download and install the [apk](https://github.com/drinkcat/SmarterScale/releases/download/v1.1/smarterscale-v1.1.apk).
 *(You will need to authorize installing apps from "Unknown Sources", the flow on your
 particular Android flavor may vary)*
 
