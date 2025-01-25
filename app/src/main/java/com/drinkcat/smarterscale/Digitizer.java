@@ -24,25 +24,26 @@ public class Digitizer {
     private HashMap<Integer,String> DIGITMAP;
 
     /* TODO: This would be better as a circular buffer. */
-    private LinkedList<String> parsedText;
+    private LinkedList<String> mParsedText;
+
     public Digitizer() {
         initDigitMap();
 
-        /* TODO: setup configurable parameters. */
-        parsedText = new LinkedList<>();
+        /* TODO: setup configurable parameters? */
+        mParsedText = new LinkedList<>();
     }
 
     public void reset() {
-        parsedText.clear();
+        mParsedText.clear();
     }
 
     public String getParsedText() {
         HashMap<String, Integer> pcount = new HashMap<String, Integer>();
-        for (String p: parsedText) {
+        for (String p: mParsedText) {
             if (p.isEmpty())
                 continue;
             int cnt = pcount.getOrDefault(p, 0) + 1;
-            if (cnt > 10)
+            if (cnt > PARSED_TEXT_ARRAY_GOOD)
                 return p;
             pcount.put(p, cnt);
         }
@@ -195,9 +196,9 @@ public class Digitizer {
                     Imgproc.FONT_HERSHEY_SIMPLEX, 5, new Scalar(128, 128, 255), 5);
 
         // TODO: Using a circular buffer would be better...
-        parsedText.addFirst(s);
-        while (parsedText.size() > 30)
-            parsedText.removeLast();
+        while (mParsedText.size() >= PARSED_TEXT_ARRAY_SIZE)
+            mParsedText.removeLast();
+        mParsedText.addFirst(s);
     }
 
     private LinkedList<TaggedRect> findSegments(Mat output, Mat int_thresh, List<MatOfPoint> cnts) {
@@ -289,8 +290,8 @@ public class Digitizer {
 
     /*** Constants, some of those should be configurable. ***/
     /* TODO: Configurable? */
-    final double MEDIAN_BLUR_SIZE = 0.002; /* Meant to be 2px for 1000px input */
-    final double ADAPTIVE_THRESHOLD_SIZE = 0.030; /* Meant to be ~30px for 1000px input */
+    private final double MEDIAN_BLUR_SIZE = 0.002; /* Meant to be 2px for 1000px input */
+    private final double ADAPTIVE_THRESHOLD_SIZE = 0.030; /* Meant to be ~30px for 1000px input */
     /* /TODO */
 
     /* We want to find digits that take 20-35% of the image height. */
@@ -317,6 +318,11 @@ public class Digitizer {
 
     /* TODO: Configurable. */
     private final double MIN_FILL_RATIO = 0.7;
+
+    /* Keep the last 30 read-outs. */
+    private final int PARSED_TEXT_ARRAY_SIZE = 30;
+    /* Consider the readout good if 10 of them are identical. */
+    private final int PARSED_TEXT_ARRAY_GOOD = 10;
 
     /*** End of constants. ***/
 }
