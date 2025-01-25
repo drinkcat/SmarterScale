@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     private lateinit var mStartStop: Button
     private lateinit var mSubmit: Button
 
-    private var mDigitizer = Digitizer()
+    private lateinit var mDigitizer: Digitizer
     private var mSmarterHealthConnect = SmarterHealthConnect(this)
 
     /* output color frame that includes drawn shapes. */
@@ -68,6 +68,8 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         if (!openCVInit()) return
         outputFull = Mat()
         mSmarterHealthConnect.init()
+
+        mDigitizer = Digitizer(com.drinkcat.smarterscale.BuildConfig.DEBUG)
 
         setupBasicLayout()
         setupEventListeners()

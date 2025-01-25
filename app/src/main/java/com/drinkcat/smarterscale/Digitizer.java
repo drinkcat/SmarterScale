@@ -26,7 +26,12 @@ public class Digitizer {
     /* TODO: This would be better as a circular buffer. */
     private LinkedList<String> mParsedText;
 
-    public Digitizer() {
+    /* Enable printing of logs. Only do this for debug builds as this has privacy implications. */
+    private boolean mExtraLogs = false;
+
+    public Digitizer(boolean extraLogs) {
+        mExtraLogs = extraLogs;
+
         initDigitMap();
 
         /* TODO: setup configurable parameters? */
@@ -174,7 +179,8 @@ public class Digitizer {
                 sigarray[idx] = 1;
             }
             String digit = DIGITMAP.get(sigArrayToSig(sigarray));
-            Log.d(TAG, "found digit: " + digit + " from " + Arrays.toString(sigarray));
+            if (mExtraLogs)
+                Log.d(TAG, "found digit: " + digit + " from " + Arrays.toString(sigarray));
 
             if (digit == null)
                 continue;
@@ -189,7 +195,8 @@ public class Digitizer {
         for (int ux: keys)
             sb.append(digits.get(ux));
         String s = sb.toString();
-        Log.d(TAG, "Parsed: <" + s + ">");
+        if (mExtraLogs)
+            Log.d(TAG, "Parsed: <" + s + ">");
 
         if (output != null)
             Imgproc.putText(output, s, new Point(0, output.size().height),
@@ -247,7 +254,8 @@ public class Digitizer {
 
             rectGood.add(new TaggedRect(rect));
 
-            Log.d(TAG, "good: " + rect + " / " + ratio + " // " + fillratio);
+            if (mExtraLogs)
+                Log.d(TAG, "good: " + rect + " / " + ratio + " // " + fillratio);
         }
 
         if (output != null) {
