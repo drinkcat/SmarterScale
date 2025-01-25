@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     private lateinit var mStartStop: Button
     private lateinit var mSubmit: Button
 
-    private var mDigitizer = Digitizer();
+    private var mDigitizer = Digitizer()
     private var mSmarterHealthConnect = SmarterHealthConnect(this)
 
     /* output color frame that includes drawn shapes. */
@@ -150,7 +150,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
         mStartStop.setOnClickListener { startStop(!started) }
         mSubmit.setOnClickListener { submitWeight() }
 
-        val menulistener = PopupMenu.OnMenuItemClickListener { item ->
+        val menuListener = PopupMenu.OnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.menu_unit_kg -> { unit = WeightUnit.KG; refreshUI(); true }
                 R.id.menu_unit_lb -> { unit = WeightUnit.LB; refreshUI(); true }
@@ -158,7 +158,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
                 R.id.menu_auto -> { autoSubmit = !item.isChecked; refreshUI(); true }
                 R.id.menu_showhelp -> { showHelp = !item.isChecked; refreshUI(); true }
                 R.id.menu_privacy -> {
-                    startActivity(Intent(this, PermissionsRationaleActivity::class.java));
+                    startActivity(Intent(this, PermissionsRationaleActivity::class.java))
                     true
                 }
                 else -> { false }
@@ -178,7 +178,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
                     R.id.menu_showhelp -> item.setChecked(showHelp)
                 }
             }
-            popup.setOnMenuItemClickListener(menulistener)
+            popup.setOnMenuItemClickListener(menuListener)
             popup.show()
         }
     }
@@ -198,17 +198,17 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     }
 
     private fun readPreferences() {
-        val pref = getPreferences(MODE_PRIVATE);
+        val pref = getPreferences(MODE_PRIVATE)
         unit = WeightUnit.fromString(pref.getString("unit", "kg")!!)
-        autoSubmit = pref.getBoolean("autoSubmit", false);
-        showHelp = pref.getBoolean("showHelp", true);
-        debug = pref.getBoolean("debug", false);
+        autoSubmit = pref.getBoolean("autoSubmit", false)
+        showHelp = pref.getBoolean("showHelp", true)
+        debug = pref.getBoolean("debug", false)
         initZoom = pref.getFloat("initZoom", 0.0f).toDouble()
     }
     /* end of init functions */
 
     private fun writePreferences() {
-        val pref = getPreferences(MODE_PRIVATE);
+        val pref = getPreferences(MODE_PRIVATE)
         with (pref.edit()) {
             putBoolean("autoSubmit", autoSubmit)
             putBoolean("showHelp", showHelp)
@@ -219,7 +219,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     }
 
     public override fun onStart() {
-        Log.d(TAG, "onStart");
+        Log.d(TAG, "onStart")
         super.onStart()
 
         if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
@@ -229,14 +229,14 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     }
 
     public override fun onPause() {
-        Log.d(TAG, "onPause");
+        Log.d(TAG, "onPause")
         super.onPause()
         startStop(false)
         writePreferences()
     }
 
     public override fun onResume() {
-        Log.d(TAG, "onResume");
+        Log.d(TAG, "onResume")
         super.onResume()
         // TODO: There's a bug here, and I don't know how to fix this cleanly:
         // When requesting permission, a new intent is created, and I don't know
@@ -247,15 +247,15 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
     }
 
     public override fun onDestroy() {
-        Log.d(TAG, "onDestroy");
+        Log.d(TAG, "onDestroy")
         super.onDestroy()
         startStop(false)
     }
 
     private fun submitWeight() {
         if (readWeight == null || !readWeight!!.isFinite())
-            return;
-        mSubmit.isEnabled = false;
+            return
+        mSubmit.isEnabled = false
         lifecycle.coroutineScope.launch {
             mSmarterHealthConnect.writeWeightInput(readWeight!!, unit)
         }
@@ -364,8 +364,5 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
 
     companion object {
         private const val TAG = "MainActivity"
-
-        /** Copied functions from openCV's CameraActivity class, as we want to extend ComponentActivity.  */
-        private const val CAMERA_PERMISSION_REQUEST_CODE = 200
     }
 }
