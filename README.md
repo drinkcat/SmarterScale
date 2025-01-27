@@ -5,7 +5,7 @@
 This is a simple app that reads weighing scale number using your phone camera (OCR),
 and writes it to [Android Health Connect](https://health.google/health-connect-android/).
 
-Interested? Download and install the [apk](https://github.com/drinkcat/SmarterScale/releases/download/v1.1/smarterscale-v1.1.apk).
+Interested? Download and install the [apk](https://github.com/drinkcat/SmarterScale/releases/download/v1.2/smarterscale-v1.2.apk).
 *(You will need to authorize installing apps from "Unknown Sources", the flow on your
 particular Android flavor may vary)*
 
@@ -50,7 +50,13 @@ I've only tested this on a Fitbit Aria Air scale. The display makes it easy to r
 digits: It is relatively large, bright, and there is enough gap between the segments for
 my simple algorithm to work.
 
-You're welcome to try it out on other scales.
+You're welcome to try it out on other scales, and report how it works.
+
+If it does not work properly, it would be awesome if you can press "Enable Debug" in the
+menu, and then press "Save images (debug)", then share the images in a
+[github issue](https://github.com/drinkcat/SmarterScale/issues/new). But please be aware
+that the tracker is public, so _PLEASE_ upload images of fake weights (e.g. add a large
+item on the scale, or press with one leg, etc.).
 
 ## More technical background
 
