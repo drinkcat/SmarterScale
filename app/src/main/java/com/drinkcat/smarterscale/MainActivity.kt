@@ -2,9 +2,14 @@ package com.drinkcat.smarterscale
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ContentResolver
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
 import android.view.MenuInflater
 import android.view.ScaleGestureDetector
@@ -18,6 +23,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.collection.CircularArray
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.iterator
@@ -26,11 +32,20 @@ import kotlinx.coroutines.launch
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewFrame
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener2
 import org.opencv.android.OpenCVLoader
+import org.opencv.android.Utils
 import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.Point
 import org.opencv.core.Scalar
+import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
+import java.io.IOException
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Objects
+import kotlin.math.ceil
+import kotlin.math.round
+import kotlin.math.sqrt
 
 
 class MainActivity : ComponentActivity(), CvCameraViewListener2 {
@@ -48,6 +63,10 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
 
     /* output color frame that includes drawn shapes. */
     private lateinit var outputFull: Mat
+
+    /* Debug only: save 9 input images (for display it's nicer to pick a square number). */
+    private val INPUT_DEBUG_SAVE_COUNT = 9
+    private var mInputDebugSave = CircularArray<Mat>(INPUT_DEBUG_SAVE_COUNT)
 
     /* State */
     private var started = false
@@ -163,6 +182,10 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
                     startActivity(Intent(this, PermissionsRationaleActivity::class.java))
                     true
                 }
+                R.id.menu_savedebug -> {
+                    saveDebugImages()
+                    true
+                }
                 else -> { false }
             }
         }
@@ -178,6 +201,7 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
                     R.id.menu_debug -> item.setChecked(debug)
                     R.id.menu_auto -> item.setChecked(autoSubmit)
                     R.id.menu_showhelp -> item.setChecked(showHelp)
+                    R.id.menu_savedebug -> item.setVisible(debug)
                 }
             }
             popup.setOnMenuItemClickListener(menuListener)
@@ -305,6 +329,8 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
             mSubmit.isEnabled = false
             readWeight = null
             mDigitizer.reset()
+            while (mInputDebugSave.size() > 0)
+                mInputDebugSave.popFirst().release()
         }
         refreshUI()
     }
@@ -321,14 +347,23 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
 
     override fun onCameraFrame(inputFrame: CvCameraViewFrame): Mat {
         // NOTE: Consistent way to break app if minify is enabled
-        // Runtime.getRuntime().gc();
+        //Runtime.getRuntime().gc();
 
         val inputColor = inputFrame.rgba()
 
         inputColor.copyTo(outputFull)
+
+        if (debug) {
+            while (mInputDebugSave.size() > INPUT_DEBUG_SAVE_COUNT-1)
+                mInputDebugSave.popFirst().release()
+            val copy = Mat()
+            inputColor.copyTo(copy)
+            mInputDebugSave.addLast(copy)
+        }
         inputColor.release()
 
         mDigitizer.parseFrame(inputFrame.gray(), outputFull, debug)
+        inputFrame.release()
 
         /* Have we found a good readout yet? */
         val p = mDigitizer.getParsedText()
@@ -362,6 +397,79 @@ class MainActivity : ComponentActivity(), CvCameraViewListener2 {
             }
         }
         return outputFull
+    }
+
+    private fun saveDebugImages() {
+        if (mInputDebugSave.size() == 0 ||
+            mInputDebugSave.first.width() == 0 ||
+            mInputDebugSave.first.height() == 0) {
+            (Toast.makeText(this, "No images to save.", Toast.LENGTH_LONG)).show()
+            return
+        }
+
+        /* That should not be necessary, but just in case. */
+        while (mInputDebugSave.size() > INPUT_DEBUG_SAVE_COUNT)
+            mInputDebugSave.popFirst().release()
+
+        val imageSize = mInputDebugSave.first.size()
+        val nImages = INPUT_DEBUG_SAVE_COUNT
+
+        val gridWidth = round(sqrt(nImages.toDouble())).toInt()
+        val gridHeight = ceil(nImages.toDouble()/gridWidth).toInt()
+
+        val outputSize = Size(imageSize.width * gridWidth, imageSize.height * gridHeight)
+        val outputMat = Mat(outputSize, CvType.CV_8UC4)
+        var cnt = 0
+
+        while (mInputDebugSave.size() > 0) {
+            val input = mInputDebugSave.popFirst()
+            if (input.size() != imageSize) {
+                (Toast.makeText(this, "Input image size not consistent? " + input.size() + "/" + imageSize, Toast.LENGTH_LONG)).show()
+                return
+            }
+
+            val x = cnt % gridWidth
+            val y = cnt / gridWidth
+            val outputMatCrop = outputMat.submat(
+                imageSize.height.toInt()*y, imageSize.height.toInt()*(y+1),
+                imageSize.width.toInt()*x, imageSize.width.toInt()*(x+1))
+            input.copyTo(outputMatCrop)
+            outputMatCrop.release()
+            input.release()
+            cnt++
+        }
+
+        val bitmap = Bitmap.createBitmap(outputMat.width(), outputMat.height(), Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(outputMat, bitmap);
+        Thread { /* TODO: This looks very Java-ish, I'm sure we can Kotlinize this. */
+            val resolver: ContentResolver = getContentResolver()
+            val contentValues = ContentValues()
+            val formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss")
+            val timeStr = ZonedDateTime.now().withNano(0).format(formatter)
+            val filename = "SmarterScale-$timeStr.jpg"
+            contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+            contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/jpg")
+            contentValues.put(
+                MediaStore.MediaColumns.RELATIVE_PATH,
+                Environment.DIRECTORY_PICTURES + "/SmarterScale (Debug)"
+            )
+            val imageUri =
+                resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+            try {
+                val fos = resolver.openOutputStream(imageUri!!)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, fos!!)
+                Objects.requireNonNull(fos).close()
+                runOnUiThread {
+                    (Toast.makeText(
+                        this,
+                        "Debug image saved as $filename",
+                        Toast.LENGTH_LONG
+                    )).show()
+                }
+            } catch (e: IOException) {
+                Log.e("PictureDemo", "Exception in photoCallback", e)
+            }
+        }.start()
     }
 
     companion object {

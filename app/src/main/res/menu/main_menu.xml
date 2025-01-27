@@ -25,4 +25,6 @@
         android:checkable="true"
         android:checked="true"
         android:title="Debug mode" />
+    <item android:id="@+id/menu_savedebug"
+        android:title="Save images (debug)" />
 </menu>
